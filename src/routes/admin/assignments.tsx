@@ -37,11 +37,30 @@ export default function Assignments() {
   const [latest, setLatest] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 10_000); // every 10 seconds (cheap & enough)
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const cached = localStorage.getItem("last_user_location");
+    if (cached) {
+      try {
+        setUserLocation(JSON.parse(cached));
+      } catch {
+        localStorage.removeItem("last_user_location");
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    // Fetch initial location
     const fetchInitialLocation = async () => {
       const { data } = await supabase
         .from("user_locations")
@@ -49,13 +68,15 @@ export default function Assignments() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: true });
 
-      console.log(data);
-
-      if (data) setUserLocation(data[data.length - 1]);
+      if (data && data.length > 0) {
+        const last = data[data.length - 1];
+        setUserLocation(last);
+        localStorage.setItem("last_user_location", JSON.stringify(last));
+      }
     };
+
     fetchInitialLocation();
 
-    // Subscribe to realtime updates
     const channel = supabase
       .channel("user-location")
       .on(
@@ -69,6 +90,7 @@ export default function Assignments() {
         (payload) => {
           const newLoc = payload.new as UserLocation;
           setUserLocation(newLoc);
+          localStorage.setItem("last_user_location", JSON.stringify(newLoc));
         }
       )
       .subscribe();
@@ -169,6 +191,10 @@ export default function Assignments() {
     getRoute();
   }, [assignments, selected, latest]);
 
+  const isStale =
+    userLocation &&
+    now - new Date(userLocation.created_at).getTime() > 2 * 60 * 1000;
+
   return (
     <div className="flex flex-col w-full h-full">
       {/* Header */}
@@ -207,9 +233,14 @@ export default function Assignments() {
             anchor="center">
             <>
               <div
-                className={`size-4 rounded-full cursor-pointer bg-[#00CAA8] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20`}
+                className={`size-4 rounded-full cursor-pointer ${
+                  isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
+                } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20`}
               />
-              <div className="size-7 rounded-full cursor-pointer aspect-square bg-[#00CAA8] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping"></div>
+              <div
+                className={`size-7 rounded-full cursor-pointer aspect-square ${
+                  isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
+                } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping`}></div>
               <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping"></div>
               <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
             </>

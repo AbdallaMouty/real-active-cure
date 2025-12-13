@@ -71,7 +71,7 @@ const SalesPage = () => {
         email: `${name.toLowerCase().replace(" ", "_")}@fake.com`,
         phone: mobile,
         password: mobile,
-        user_metadata: { is_anonymous: false },
+        user_metadata: { is_anonymous: true },
         email_confirm: true,
       });
       if (error) {
