@@ -270,17 +270,25 @@ const Sales = () => {
   };*/
 
   const saveNewLocation = async () => {
-    if (!selected) {
-      alert("No location selected.");
+    if (!userLocation) {
+      alert("No current location available.");
       return;
     }
+    
+    const newLocationData = {
+      latitude: userLocation.latitude,
+      longitude: userLocation.longitude,
+      ...newLocationInfo,
+      number: user?.phone || ""
+    };
+    
     const { data, error } = await supabase
       .from("locations")
-      .insert([{ ...selected, ...newLocationInfo }])
+      .insert([newLocationData])
       .select("*");
     if (data) {
       try {
-        const updatedLoc = { ...selected, ...newLocationInfo };
+        const updatedLoc = data[0];
         setLocations([...locations, updatedLoc]);
         setModalVisible(false);
         setNewLocationInfo({ name: "", address: "", time: date });

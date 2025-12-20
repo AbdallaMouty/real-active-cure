@@ -30,9 +30,11 @@ const Admins = () => {
 
   const getUsers = async () => {
     const { data, error } = await supabaseAdmin.auth.admin.listUsers();
-
+    console.log(data);
     if (data) {
-      setUsers(data.users.filter((user) => !user.is_anonymous));
+      setUsers(
+        data.users.filter((user) => user.user_metadata?.is_anonymous !== true)
+      );
     }
     if (error) {
       alert("an error occured");

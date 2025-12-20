@@ -11,6 +11,7 @@ export default function Tracking() {
 
   const getUsers = async () => {
     const { data } = await supabaseAdmin.auth.admin.listUsers();
+    console.log(data);
     if (data?.users) {
       setUsers(data.users as User[]);
     } else {

@@ -32,7 +32,9 @@ const SalesPage = () => {
     const { data, error } = await supabaseAdmin.auth.admin.listUsers();
 
     if (data) {
-      setUsers(data.users.filter((user) => user.is_anonymous));
+      setUsers(
+        data.users.filter((user) => user.user_metadata?.is_anonymous === true)
+      );
     }
     if (error) {
       alert("an error occured");
@@ -67,13 +69,20 @@ const SalesPage = () => {
 
   const addUser = async () => {
     try {
+      // Create user with anonymous metadata
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email: `${name.toLowerCase().replace(" ", "_")}@fake.com`,
         phone: mobile,
         password: mobile,
-        user_metadata: { is_anonymous: true },
         email_confirm: true,
+        user_metadata: { is_anonymous: true },
       });
+
+      if (error) {
+        console.error("Error creating user:", error);
+        return;
+      }
+      console.log("User created:", data);
       if (error) {
         console.error("Error creating user:", error);
         return;
