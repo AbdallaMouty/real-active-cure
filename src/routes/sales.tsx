@@ -1,4 +1,4 @@
-import store from "@/lib/store";
+import store, { authStore } from "@/lib/store";
 import supabase from "@/utils/supabase";
 import { ChevronDown, Info, MapPin, Menu } from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -36,19 +36,15 @@ import Hand from "@/components/icons/Hand";
 import LogoutIcon from "@/components/icons/LogoutIcon";
 import LangIcon from "@/components/icons/LangIcon";
 import ReportIcon from "@/components/icons/ReportIcon";
+import { useErrorDialog } from "@/hooks/use-error-dialog";
 
 const token = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
 
 const Sales = () => {
-  const {
-    active,
-    setActive,
-    reportOpen,
-    toggleReportOpen,
-    user,
-    lang,
-    setLang,
-  } = store();
+  const { active, setActive, reportOpen, toggleReportOpen, lang, setLang } =
+    store();
+  const { user, setUser, setPassword } = authStore();
+  const { showError, showSuccess, ErrorDialogComponent } = useErrorDialog();
   const navigate = useNavigate();
 
   const langs = [
@@ -91,7 +87,10 @@ const Sales = () => {
       // Request permission
       const permission = await Geolocation.requestPermissions();
       if (permission.location === "denied") {
-        alert("Location permission denied. Please enable it to continue.");
+        showError(
+          "Location permission denied. Please enable it to continue.",
+          "Permission Required"
+        );
         return;
       }
 
@@ -146,21 +145,30 @@ const Sales = () => {
   const [activate, setActivate] = useState(false);
 
   const getLocations = async () => {
-    const userData = await supabase.auth.getUser();
-    console.log(userData.data);
-    if (userData.data.user) {
-      const { data, error } = await supabase
-        .from("locations")
-        .select("*")
-        .eq("user_id", userData.data.user.id);
-      if (data) {
-        setLocations(data);
-      } else {
-        alert("please check your internet connection");
+    try {
+      const userData = await supabase.auth.getUser();
+      console.log(userData.data);
+      if (userData.data.user) {
+        const { data, error } = await supabase
+          .from("locations")
+          .select("*")
+          .eq("user_id", userData.data.user.id);
+        if (data) {
+          setLocations(data);
+        } else {
+          showError(
+            "please check your internet connection",
+            "Connection Error"
+          );
+        }
+        if (error) {
+          console.log(error);
+          showError("Failed to fetch locations", "Error");
+        }
       }
-      if (error) {
-        console.log(error);
-      }
+    } catch (error) {
+      console.error("Error getting locations:", error);
+      showError("Failed to fetch locations", "Error");
     }
   };
 
@@ -185,7 +193,7 @@ const Sales = () => {
       // Request permission first (if needed)
       const permission = await Geolocation.requestPermissions();
       if (permission.location === "denied") {
-        alert("Location permission denied");
+        showError("Location permission denied", "Permission Required");
         return;
       }
 
@@ -199,7 +207,7 @@ const Sales = () => {
       setLocation(position); // store in state
     } catch (error) {
       console.error("Error getting location:", error);
-      alert("Failed to get current location");
+      showError("Failed to get current location", "Location Error");
     }
   }
 
@@ -229,11 +237,11 @@ const Sales = () => {
       return;
     }
     if (!location) {
-      alert("Location not available yet.");
+      showError("Location not available yet.", "Location Unavailable");
       return;
     }
     if (!location?.coords) {
-      alert("Location not ready.");
+      showError("Location not ready.", "Location Error");
       return;
     }
 
@@ -271,35 +279,35 @@ const Sales = () => {
 
   const saveNewLocation = async () => {
     if (!userLocation) {
-      alert("No current location available.");
+      showError("No current location available.", "Location Required");
       return;
     }
-    
-    const newLocationData = {
-      latitude: userLocation.latitude,
-      longitude: userLocation.longitude,
-      ...newLocationInfo,
-      number: user?.phone || ""
-    };
-    
-    const { data, error } = await supabase
-      .from("locations")
-      .insert([newLocationData])
-      .select("*");
-    if (data) {
-      try {
+
+    try {
+      const newLocationData = {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        ...newLocationInfo,
+        number: user?.phone || "",
+      };
+
+      const { data, error } = await supabase
+        .from("locations")
+        .insert([newLocationData])
+        .select("*");
+      if (data) {
         const updatedLoc = data[0];
         setLocations([...locations, updatedLoc]);
         setModalVisible(false);
         setNewLocationInfo({ name: "", address: "", time: date });
         setSelected(updatedLoc);
-      } catch (error) {
-        console.error("Error saving location:", error);
-        alert("Failed to save location.");
+      } else {
+        console.error(error);
+        showError("an error occured", "Error");
       }
-    } else {
-      console.error(error);
-      alert("an error occured");
+    } catch (error) {
+      console.error("Error saving location:", error);
+      showError("Failed to save location.", "Error");
     }
   };
 
@@ -316,30 +324,35 @@ const Sales = () => {
   const [description, setDescription] = useState("");
 
   const addReport = async () => {
-    const { data, error } = await supabase
-      .from("reports")
-      .insert([
-        {
-          title,
-          description,
-          user_id: user?.id,
-          type: reportType,
-          sender: user?.name,
-        },
-      ])
-      .select("*");
+    try {
+      const { data, error } = await supabase
+        .from("reports")
+        .insert([
+          {
+            title,
+            description,
+            user_id: user?.id,
+            type: reportType,
+            sender: user?.email.split("@")[0],
+          },
+        ])
+        .select("*");
 
-    if (data) {
-      toggleReportOpen();
-    } else {
-      console.log(error);
-      alert("an error occured");
+      if (data) {
+        toggleReportOpen();
+      } else {
+        console.log(error);
+        showError("an error occured", "Error");
+      }
+    } catch (error) {
+      console.error("Error submitting report:", error);
+      showError("an error occured", "Error");
     }
   };
 
   const logAssignment = async () => {
     if (!selected || !user) {
-      alert("Missing user or location.");
+      showError("Missing user or location.", "Validation Error");
       return;
     }
 
@@ -355,7 +368,7 @@ const Sales = () => {
 
       if (fetchError) {
         console.error(fetchError);
-        alert("Failed to fetch existing assignments.");
+        showError("Failed to fetch existing assignments.", "Database Error");
         return;
       }
 
@@ -369,10 +382,10 @@ const Sales = () => {
 
         if (error) {
           console.error("Error updating assignment:", error);
-          alert("Could not update assignment.");
+          showError("Could not update assignment.", "Database Error");
         } else {
           console.log("Assignment updated:", data);
-          alert("Assignment updated successfully.");
+          showSuccess("Assignment updated successfully.", "Success");
         }
       } else {
         // Insert a new assignment
@@ -393,14 +406,15 @@ const Sales = () => {
 
         if (error) {
           console.error("Error logging assignment:", error);
-          alert("Could not save assignment.");
+          showError("Could not save assignment.", "Database Error");
         } else {
           console.log("Assignment logged:", data);
-          alert("Assigned successfully.");
+          showSuccess("Assigned successfully.", "Success");
         }
       }
     } catch (err) {
       console.error("Unexpected error logging assignment:", err);
+      showError("An unexpected error occurred.", "Error");
     }
   };
 
@@ -410,7 +424,9 @@ const Sales = () => {
         dir={lang === "en" ? "ltr" : "rtl"}
         className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[9vh] font-semibold gap-5 pt-12">
         <Menu onClick={() => setSide(true)} />
-        <span className="capitalize">{user?.name}</span>
+        <span className="capitalize">
+          {user?.email.split("@")[0].replaceAll("_", " ")}
+        </span>
       </div>
       <div
         dir={lang === "en" ? "ltr" : "rtl"}
@@ -467,21 +483,36 @@ const Sales = () => {
             longitude={userLocation.longitude}
             latitude={userLocation.latitude}
             anchor="center">
-            <div
-              style={{
-                width: "16px",
-                height: "16px",
-                backgroundColor: "blue",
-                borderRadius: "50%",
-                border: "2px solid white",
-              }}
-            />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              id="Layer_1"
+              data-name="Layer 1"
+              viewBox="0 0 24 24"
+              width="44"
+              height="44"
+              className="animate-caret-blink"
+              fill="oklch(70.4% 0.14 182.503)">
+              <path d="M9.5,2.5c0-1.381,1.119-2.5,2.5-2.5s2.5,1.119,2.5,2.5-1.119,2.5-2.5,2.5-2.5-1.119-2.5-2.5Zm7.5,7.5v3c0,1.474-.81,2.75-2,3.444v6.556c0,.552-.447,1-1,1s-1-.448-1-1v-6h-2v6c0,.552-.447,1-1,1s-1-.448-1-1v-6.556c-1.19-.694-2-1.97-2-3.444v-3c0-2.206,1.794-4,4-4h2c2.206,0,4,1.794,4,4Z" />
+            </svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              id="Layer_1"
+              data-name="Layer 1"
+              viewBox="0 0 24 24"
+              width="40"
+              height="40"
+              className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2"
+              fill="oklch(70.4% 0.14 182.503)">
+              <path d="M9.5,2.5c0-1.381,1.119-2.5,2.5-2.5s2.5,1.119,2.5,2.5-1.119,2.5-2.5,2.5-2.5-1.119-2.5-2.5Zm7.5,7.5v3c0,1.474-.81,2.75-2,3.444v6.556c0,.552-.447,1-1,1s-1-.448-1-1v-6h-2v6c0,.552-.447,1-1,1s-1-.448-1-1v-6.556c-1.19-.694-2-1.97-2-3.444v-3c0-2.206,1.794-4,4-4h2c2.206,0,4,1.794,4,4Z" />
+            </svg>
           </Marker>
         )}
         {locations.map((location) => (
           <Marker
             longitude={location.longitude}
             latitude={location.latitude}
+            anchor="center"
+            className="relative"
             onClick={() => {
               setSelected(location);
               if (mapRef.current) {
@@ -493,8 +524,9 @@ const Sales = () => {
                   essential: true, // this ensures animation works even with reduced motion
                 });
               }
-            }}
-          />
+            }}>
+            <MapPin className="fill-teal-500 text-teal-700 size-8" />
+          </Marker>
         ))}
         <Button
           onClick={assign}
@@ -568,7 +600,8 @@ const Sales = () => {
 
               <button
                 onClick={() => {
-                  //setUser(null);
+                  setUser(null);
+                  setPassword(null);
                   navigate("/");
                 }}
                 className="flex items-center justify-center gap-1">
@@ -700,7 +733,7 @@ const Sales = () => {
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <Dialog.Panel className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
           <Dialog.Title className="text-lg font-semibold">
             Add Location
           </Dialog.Title>
@@ -763,7 +796,7 @@ const Sales = () => {
             onClick={() => setModalVisible(false)}>
             Cancel
           </button>
-        </Dialog.Panel>
+        </div>
       </Dialog>
       {activate && (
         <div
@@ -781,6 +814,7 @@ const Sales = () => {
           </p>
         </div>
       )}
+      <ErrorDialogComponent />
     </div>
   );
 };

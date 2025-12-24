@@ -25,6 +25,15 @@ export interface StoreType {
   setUser: (user: User) => void;
 }
 
+export interface AuthStoreType {
+  user: User | null;
+  setUser: (user: User | null) => void;
+  password: string | null;
+  setPassword: (password: string | null) => void;
+  role: { en: string; ar: string; kr: string };
+  setRole: (role: { en: string; ar: string; kr: string }) => void;
+}
+
 export interface User {
   id: string;
   email: string;

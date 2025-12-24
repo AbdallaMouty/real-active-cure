@@ -10,6 +10,14 @@ import { useNavigate, useParams } from "react-router";
 import HouseIcon from "@/components/icons/HouseIcon";
 import TimeIcon from "@/components/icons/TimeIcon";
 import AddressIcon from "@/components/AddressIcon";
+import { useErrorDialog } from "@/hooks/use-error-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Calendar } from "@/components/ui/calendar";
 
 type User = {
   id: string;
@@ -38,6 +46,7 @@ export default function Assignments() {
   const [user, setUser] = useState<User | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [now, setNow] = useState(Date.now());
+  const { ErrorDialogComponent, showError } = useErrorDialog();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -114,21 +123,25 @@ export default function Assignments() {
   };
 
   const getAssignments = async (uid: string) => {
-    const { data, error } = await supabase
-      .from("locations")
-      .select("*")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error(error);
-      alert("Error loading assignments");
-      return;
-    }
+      if (error) {
+        console.error(error);
+        showError("Error loading assignments");
+        return;
+      }
 
-    if (data && data.length > 0) {
-      setAssignments(data as UserLocation[]);
-      setLatest(data[0].id);
+      if (data && data.length > 0) {
+        setAssignments(data as UserLocation[]);
+        setLatest(data[0].id);
+      }
+    } catch {
+      showError("Error loading assignments");
     }
   };
 
@@ -138,17 +151,21 @@ export default function Assignments() {
       setSelected(null);
       setLatest(null);
 
-      const { data } = await supabaseAdmin.auth.admin.listUsers();
-      if (!data?.users) {
-        alert("Please check your internet connection");
-        return;
-      }
+      try {
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers();
+        if (error || !data?.users) {
+          showError("Please check your internet connection");
+          return;
+        }
 
-      const selectedUser = data.users.find((u) => u.id === id) as User;
-      setUser(selectedUser || null);
+        const selectedUser = data.users.find((u) => u.id === id) as User;
+        setUser(selectedUser || null);
 
-      if (selectedUser) {
-        await getAssignments(selectedUser.id);
+        if (selectedUser) {
+          await getAssignments(selectedUser.id);
+        }
+      } catch {
+        showError("Please check your internet connection");
       }
     };
 
@@ -195,135 +212,174 @@ export default function Assignments() {
     userLocation &&
     now - new Date(userLocation.created_at).getTime() > 2 * 60 * 1000;
 
+  const [date, setDate] = useState<Date | undefined>(undefined);
+
   return (
-    <div className="flex flex-col w-full h-full">
-      {/* Header */}
-      <div className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[8.7vh] font-semibold gap-5 pt-12">
-        <ChevronLeft onClick={() => navigate("/admin/tracking")} />
-        <span className="capitalize">
-          {user && user.email.replace("_", " ").split("@")[0]}
-        </span>
-      </div>
-      <div className="flex justify-between items-center bg-emerald-900 px-6 py-3">
-        <p className="text-white font-medium">
-          {assignments.length} Assignments
-        </p>
-        <Button
-          className="bg-teal-500 text-white hover:bg-teal-600"
-          onClick={() => user && getAssignments(user.id)}>
-          Refresh
-        </Button>
-      </div>
-
-      {/* Map */}
-      <Map
-        ref={mapRef}
-        mapboxAccessToken={MAPBOX_TOKEN}
-        initialViewState={{
-          longitude: 44.009167,
-          latitude: 36.191113,
-          zoom: 10,
-        }}
-        style={{ width: "100%", height: "70vh", position: "relative" }}
-        mapStyle="mapbox://styles/mapbox/streets-v9">
-        {userLocation && (
-          <Marker
-            longitude={userLocation.longitude}
-            latitude={userLocation.latitude}
-            anchor="center">
-            <>
-              <div
-                className={`size-4 rounded-full cursor-pointer ${
-                  isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
-                } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20`}
+    <>
+      <div className="flex flex-col w-full h-full">
+        {/* Header */}
+        <div className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[8.7vh] font-semibold gap-5 pt-12">
+          <ChevronLeft onClick={() => navigate("/admin/tracking")} />
+          <span className="capitalize">
+            {user && user.email.replace("_", " ").split("@")[0]}
+          </span>
+        </div>
+        <div className="flex justify-between items-center bg-emerald-900 px-6 py-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="text-white font-medium">
+              {assignments.length} Assignments
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {assignments.map((a) => (
+                <DropdownMenuItem onClick={() => setSelected(a)}>
+                  {a.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="text-white font-medium">
+              {date
+                ? `${date.getFullYear()}/${
+                    date.getMonth() + 1
+                  }/${date.getDate()}`
+                : "Select Date"}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={setDate}
+                className="rounded-md border shadow-sm"
+                captionLayout="dropdown"
               />
-              <div
-                className={`size-7 rounded-full cursor-pointer aspect-square ${
-                  isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
-                } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping`}></div>
-              <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping"></div>
-              <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
-            </>
-          </Marker>
-        )}
-        {assignments.map((a) => (
-          <Marker
-            key={a.id}
-            longitude={a.longitude}
-            latitude={a.latitude}
-            className="relative"
-            onClick={(e) => {
-              e.originalEvent.stopPropagation();
-              setSelected(a);
-              if (mapRef.current) {
-                const map = mapRef.current.getMap();
-                map.flyTo({
-                  center: [a.longitude, a.latitude],
-                  zoom: 15,
-                  essential: true,
-                });
-              }
-            }}>
-            {a.id !== latest && (
-              <MapPin className="fill-teal-500 text-teal-700 size-8" />
-            )}
-            {a.id === latest && (
-              <>
-                <MapPin className="fill-teal-500 text-teal-700 size-10 animate-pulse" />
-              </>
-            )}
-          </Marker>
-        ))}
-        {/* Line between user and selected assignment */}
-        {route && (
-          <Source
-            id="route-source"
-            type="geojson"
-            data={{
-              type: "Feature",
-              geometry: route,
-              properties: {},
-            }}>
-            <Layer
-              id="route-layer"
-              type="line"
-              layout={{
-                "line-join": "round",
-                "line-cap": "round",
-              }}
-              paint={{
-                "line-color": "#00CAA8",
-                "line-width": 6,
-              }}
-            />
-          </Source>
-        )}
-      </Map>
-
-      {/* Bottom Info Card */}
-      <div className="w-full h-[15vh] bg-primary p-4 px-6 flex items-center justify-center">
-        <div className="h-full w-2/3 flex flex-col items-start justify-start gap-2 text-white">
-          <div className="w-full flex items-center justify-start gap-2">
-            <HouseIcon />
-            <span>{selected?.name}</span>
-          </div>
-          <div className="w-full flex items-center justify-start gap-2">
-            <TimeIcon />
-            <span>
-              {selected?.created_at
-                ? formatDateTime(selected.created_at)
-                : "No time"}
-            </span>
-          </div>
-          <div className="w-full flex items-center justify-start gap-2">
-            <AddressIcon />
-            <span>{selected?.address}</span>
-          </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            className="bg-teal-500 text-white hover:bg-teal-600"
+            onClick={() => user && getAssignments(user.id)}>
+            Refresh
+          </Button>
         </div>
-        <div className="h-full w-1/3 flex items-center justify-between flex-col text-white text-lg">
-          <span>{selected?.number}</span>
+
+        {/* Map */}
+        <Map
+          ref={mapRef}
+          mapboxAccessToken={MAPBOX_TOKEN}
+          initialViewState={{
+            longitude: 44.009167,
+            latitude: 36.191113,
+            zoom: 10,
+          }}
+          style={{ width: "100%", height: "70vh", position: "relative" }}
+          mapStyle="mapbox://styles/mapbox/streets-v9">
+          {userLocation && (
+            <Marker
+              longitude={userLocation.longitude}
+              latitude={userLocation.latitude}
+              anchor="center">
+              <>
+                <div
+                  className={`size-4 rounded-full cursor-pointer ${
+                    isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
+                  } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20`}
+                />
+                <div
+                  className={`size-7 rounded-full cursor-pointer aspect-square ${
+                    isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
+                  } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping`}></div>
+                <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping"></div>
+                <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+              </>
+            </Marker>
+          )}
+          {assignments
+            .filter((a) =>
+              date
+                ? formatDateTime(a.created_at).split(",")[0] ===
+                  formatDateTime(date.toISOString()).split(",")[0]
+                : true
+            )
+            .map((a) => (
+              <Marker
+                key={a.id}
+                longitude={a.longitude}
+                latitude={a.latitude}
+                className="relative"
+                onClick={(e) => {
+                  e.originalEvent.stopPropagation();
+                  setSelected(a);
+                  if (mapRef.current) {
+                    const map = mapRef.current.getMap();
+                    map.flyTo({
+                      center: [a.longitude, a.latitude],
+                      zoom: 15,
+                      essential: true,
+                    });
+                  }
+                }}>
+                {a.id !== latest && (
+                  <MapPin className="fill-teal-500 text-teal-700 size-8" />
+                )}
+                {a.id === latest && (
+                  <>
+                    <MapPin className="fill-teal-500 text-teal-700 size-10 animate-pulse" />
+                  </>
+                )}
+              </Marker>
+            ))}
+          {/* Line between user and selected assignment */}
+          {route && (
+            <Source
+              id="route-source"
+              type="geojson"
+              data={{
+                type: "Feature",
+                geometry: route,
+                properties: {},
+              }}>
+              <Layer
+                id="route-layer"
+                type="line"
+                layout={{
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
+                paint={{
+                  "line-color": "#00CAA8",
+                  "line-width": 6,
+                }}
+              />
+            </Source>
+          )}
+        </Map>
+
+        {/* Bottom Info Card */}
+        <div className="w-full h-[15vh] bg-primary p-4 px-6 flex items-center justify-center">
+          <div className="h-full w-2/3 flex flex-col items-start justify-start gap-2 text-white">
+            <div className="w-full flex items-center justify-start gap-2">
+              <HouseIcon />
+              <span>{selected?.name}</span>
+            </div>
+            <div className="w-full flex items-center justify-start gap-2">
+              <TimeIcon />
+              <span>
+                {selected?.created_at
+                  ? formatDateTime(selected.created_at)
+                  : "No time"}
+              </span>
+            </div>
+            <div className="w-full flex items-center justify-start gap-2">
+              <AddressIcon />
+              <span>{selected?.address}</span>
+            </div>
+          </div>
+          <div className="h-full w-1/3 flex items-center justify-between flex-col text-white text-lg">
+            <span>{selected?.number}</span>
+          </div>
         </div>
       </div>
-    </div>
+      <ErrorDialogComponent />
+    </>
   );
 }

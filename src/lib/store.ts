@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import type { Language, LocationType, StoreType, User } from "./types";
+import type {
+  AuthStoreType,
+  Language,
+  LocationType,
+  StoreType,
+  User,
+} from "./types";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 const store = create<StoreType>((set) => ({
   lang: "en",
@@ -30,5 +37,24 @@ const store = create<StoreType>((set) => ({
   user: null,
   setUser: (user: User) => set(() => ({ user })),
 }));
+
+export const authStore = create(
+  persist<AuthStoreType>(
+    (set) => ({
+      user: null,
+      setUser: (user: User | null) => set(() => ({ user })),
+      password: null,
+      setPassword: (password: string | null) => set(() => ({ password })),
+      role: {
+        en: "Sales Representative",
+        ar: "مندوب مبيعات",
+        kr: "نوێنەری فرۆشتن",
+      },
+      setRole: (role: { en: string; ar: string; kr: string }) =>
+        set(() => ({ role })),
+    }),
+    { name: "authStore", storage: createJSONStorage(() => localStorage) }
+  )
+);
 
 export default store;

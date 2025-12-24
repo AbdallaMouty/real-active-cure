@@ -11,7 +11,7 @@ import { useNavigate } from "react-router";
 import en from "../assets/flags/en.png";
 import ar from "../assets/flags/ar.png";
 import kr from "../assets/flags/kr.png";
-import store from "@/lib/store";
+import store, { authStore } from "@/lib/store";
 import LangIcon from "@/components/icons/LangIcon";
 import LogoutIcon from "@/components/icons/LogoutIcon";
 
@@ -23,7 +23,8 @@ const langs = [
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
-  const { lang, setLang, user } = store();
+  const { lang, setLang } = store();
+  const { user, setUser } = authStore();
 
   const [side, setSide] = useState(false);
 
@@ -64,9 +65,11 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="w-screen h-screen overflow-hidden">
       <nav
         dir={lang === "en" ? "ltr" : "rtl"}
-        className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[9vh] font-semibold gap-5 pt-12">
+        className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[9vh] font-semibold gap-5 pt-16">
         <Menu className="text-white" onClick={() => setSide(true)} />
-        <span className="text-white capitalize">{user?.name}</span>
+        <span className="text-white capitalize">
+          {user?.email.split("@")[0].replaceAll("_", " ")}
+        </span>
       </nav>
       {side && (
         <div
@@ -119,7 +122,7 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
               </Accordion>
               <button
                 onClick={() => {
-                  //setUser(null);
+                  setUser(null);
                   navigate("/");
                 }}
                 className="flex items-center justify-center gap-1">
