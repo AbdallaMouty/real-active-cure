@@ -5,7 +5,7 @@ import Map, { Marker, type MapRef, Source, Layer } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import supabase, { supabaseAdmin } from "@/utils/supabase";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, MapPin } from "lucide-react";
+import { ChevronDown, ChevronLeft, MapPin } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import HouseIcon from "@/components/icons/HouseIcon";
 import TimeIcon from "@/components/icons/TimeIcon";
@@ -226,24 +226,40 @@ export default function Assignments() {
         </div>
         <div className="flex justify-between items-center bg-emerald-900 px-6 py-3">
           <DropdownMenu>
-            <DropdownMenuTrigger className="text-white font-medium">
-              {assignments.length} Assignments
+            <DropdownMenuTrigger className="text-white font-medium border p-2 rounded-md flex items-center justify-center gap-1 border-white/50">
+              {
+                assignments.filter((a) =>
+                  date
+                    ? formatDateTime(a.created_at).split(",")[0] ===
+                      formatDateTime(date.toISOString()).split(",")[0]
+                    : true
+                ).length
+              }{" "}
+              Assignments <ChevronDown />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              {assignments.map((a) => (
-                <DropdownMenuItem onClick={() => setSelected(a)}>
-                  {a.name}
-                </DropdownMenuItem>
-              ))}
+              {assignments
+                .filter((a) =>
+                  date
+                    ? formatDateTime(a.created_at).split(",")[0] ===
+                      formatDateTime(date.toISOString()).split(",")[0]
+                    : true
+                )
+                .map((a) => (
+                  <DropdownMenuItem onClick={() => setSelected(a)}>
+                    {a.name}
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
-            <DropdownMenuTrigger className="text-white font-medium">
+            <DropdownMenuTrigger className="text-white font-medium border p-2 rounded-md flex items-center justify-center gap-1 border-white/50">
               {date
                 ? `${date.getFullYear()}/${
                     date.getMonth() + 1
                   }/${date.getDate()}`
-                : "Select Date"}
+                : "Select Date"}{" "}
+              <ChevronDown />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <Calendar
@@ -257,7 +273,8 @@ export default function Assignments() {
           </DropdownMenu>
           <Button
             className="bg-teal-500 text-white hover:bg-teal-600"
-            onClick={() => user && getAssignments(user.id)}>
+            onClick={() => user && getAssignments(user.id)}
+          >
             Refresh
           </Button>
         </div>
@@ -272,12 +289,14 @@ export default function Assignments() {
             zoom: 10,
           }}
           style={{ width: "100%", height: "70vh", position: "relative" }}
-          mapStyle="mapbox://styles/mapbox/streets-v9">
+          mapStyle="mapbox://styles/mapbox/streets-v9"
+        >
           {userLocation && (
             <Marker
               longitude={userLocation.longitude}
               latitude={userLocation.latitude}
-              anchor="center">
+              anchor="center"
+            >
               <>
                 <div
                   className={`size-4 rounded-full cursor-pointer ${
@@ -287,7 +306,8 @@ export default function Assignments() {
                 <div
                   className={`size-7 rounded-full cursor-pointer aspect-square ${
                     isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
-                  } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping`}></div>
+                  } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping`}
+                ></div>
                 <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping"></div>
                 <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
               </>
@@ -317,7 +337,8 @@ export default function Assignments() {
                       essential: true,
                     });
                   }
-                }}>
+                }}
+              >
                 {a.id !== latest && (
                   <MapPin className="fill-teal-500 text-teal-700 size-8" />
                 )}
@@ -337,7 +358,8 @@ export default function Assignments() {
                 type: "Feature",
                 geometry: route,
                 properties: {},
-              }}>
+              }}
+            >
               <Layer
                 id="route-layer"
                 type="line"

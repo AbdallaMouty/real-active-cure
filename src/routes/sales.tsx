@@ -1,6 +1,6 @@
 import store, { authStore } from "@/lib/store";
 import supabase from "@/utils/supabase";
-import { ChevronDown, Info, MapPin, Menu } from "lucide-react";
+import { ChevronDown, Info, MapPin, Menu, User } from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import Map, { Marker } from "react-map-gl/mapbox";
@@ -144,6 +144,11 @@ const Sales = () => {
   const [side, setSide] = useState(false);
   const [activate, setActivate] = useState(false);
 
+  const today = new Date();
+  const today_date = `${today.getFullYear()}-${String(
+    today.getMonth() + 1
+  ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
   const getLocations = async () => {
     try {
       const userData = await supabase.auth.getUser();
@@ -152,7 +157,8 @@ const Sales = () => {
         const { data, error } = await supabase
           .from("locations")
           .select("*")
-          .eq("user_id", userData.data.user.id);
+          .eq("user_id", userData.data.user.id)
+          .eq("time", today_date);
         if (data) {
           setLocations(data);
         } else {
@@ -422,7 +428,8 @@ const Sales = () => {
     <div className="h-full w-full relative">
       <div
         dir={lang === "en" ? "ltr" : "rtl"}
-        className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[9vh] font-semibold gap-5 pt-12">
+        className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[9vh] font-semibold gap-5 pt-12"
+      >
         <Menu onClick={() => setSide(true)} />
         <span className="capitalize">
           {user?.email.split("@")[0].replaceAll("_", " ")}
@@ -430,7 +437,8 @@ const Sales = () => {
       </div>
       <div
         dir={lang === "en" ? "ltr" : "rtl"}
-        className="w-full flex items-center justify-between bg-secondary p-4 h-[6.5vh] relative">
+        className="w-full flex items-center justify-between bg-secondary p-4 h-[6.5vh] relative"
+      >
         {activate && (
           <Hand
             className={`absolute w-16 ${
@@ -477,34 +485,15 @@ const Sales = () => {
           zoom: 10,
         }}
         style={{ width: "100vw", height: "70vh", position: "relative" }}
-        mapStyle="mapbox://styles/mapbox/streets-v9">
+        mapStyle="mapbox://styles/mapbox/streets-v9"
+      >
         {userLocation && active && (
           <Marker
             longitude={userLocation.longitude}
             latitude={userLocation.latitude}
-            anchor="center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              id="Layer_1"
-              data-name="Layer 1"
-              viewBox="0 0 24 24"
-              width="44"
-              height="44"
-              className="animate-caret-blink"
-              fill="oklch(70.4% 0.14 182.503)">
-              <path d="M9.5,2.5c0-1.381,1.119-2.5,2.5-2.5s2.5,1.119,2.5,2.5-1.119,2.5-2.5,2.5-2.5-1.119-2.5-2.5Zm7.5,7.5v3c0,1.474-.81,2.75-2,3.444v6.556c0,.552-.447,1-1,1s-1-.448-1-1v-6h-2v6c0,.552-.447,1-1,1s-1-.448-1-1v-6.556c-1.19-.694-2-1.97-2-3.444v-3c0-2.206,1.794-4,4-4h2c2.206,0,4,1.794,4,4Z" />
-            </svg>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              id="Layer_1"
-              data-name="Layer 1"
-              viewBox="0 0 24 24"
-              width="40"
-              height="40"
-              className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2"
-              fill="oklch(70.4% 0.14 182.503)">
-              <path d="M9.5,2.5c0-1.381,1.119-2.5,2.5-2.5s2.5,1.119,2.5,2.5-1.119,2.5-2.5,2.5-2.5-1.119-2.5-2.5Zm7.5,7.5v3c0,1.474-.81,2.75-2,3.444v6.556c0,.552-.447,1-1,1s-1-.448-1-1v-6h-2v6c0,.552-.447,1-1,1s-1-.448-1-1v-6.556c-1.19-.694-2-1.97-2-3.444v-3c0-2.206,1.794-4,4-4h2c2.206,0,4,1.794,4,4Z" />
-            </svg>
+            anchor="center"
+          >
+            <User fill="yellow" stroke="oklch(70.4% 0.14 182.503)" />
           </Marker>
         )}
         {locations.map((location) => (
@@ -524,13 +513,15 @@ const Sales = () => {
                   essential: true, // this ensures animation works even with reduced motion
                 });
               }
-            }}>
+            }}
+          >
             <MapPin className="fill-teal-500 text-teal-700 size-8" />
           </Marker>
         ))}
         <Button
           onClick={assign}
-          className="absolute bottom-4 right-4 rounded-full size-12 z-30 shadow-xl">
+          className="absolute bottom-4 right-4 rounded-full size-12 z-30 shadow-xl"
+        >
           <MapPin className="size-6" />
         </Button>
       </Map>
@@ -556,7 +547,8 @@ const Sales = () => {
           <Button
             onClick={logAssignment}
             variant={"secondary"}
-            className="text-white rounded-none">
+            className="text-white rounded-none"
+          >
             Assign
           </Button>
         </div>
@@ -571,7 +563,8 @@ const Sales = () => {
                   setSide(false);
                   toggleReportOpen();
                 }}
-                className="flex items-center justify-center gap-1">
+                className="flex items-center justify-center gap-1"
+              >
                 <ReportIcon />
                 {lang === "en" ? "Report" : lang === "ar" ? "تقرير" : "ڕاپۆرت"}
               </button>
@@ -589,7 +582,8 @@ const Sales = () => {
                     {langs.map((l) => (
                       <button
                         onClick={() => setLang(l.value as "en" | "ar" | "kr")}
-                        className="w-full flex items-center justify-start gap-2">
+                        className="w-full flex items-center justify-start gap-2"
+                      >
                         <img src={l.flag} className="w-10" />
                         {l.name}
                       </button>
@@ -604,7 +598,8 @@ const Sales = () => {
                   setPassword(null);
                   navigate("/");
                 }}
-                className="flex items-center justify-center gap-1">
+                className="flex items-center justify-center gap-1"
+              >
                 <LogoutIcon />{" "}
                 {lang === "en"
                   ? "Logout"
@@ -620,12 +615,14 @@ const Sales = () => {
       {reportOpen && (
         <div
           onClick={toggleReportOpen}
-          className="absolute inset-0 bg-black/20 z-50 flex justify-center items-center">
+          className="absolute inset-0 bg-black/20 z-50 flex justify-center items-center"
+        >
           {/* Modal Card */}
           <Card
             dir={lang === "en" ? "ltr" : "rtl"}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white w-4/5 h-fit p-5 flex flex-col gap-5 relative">
+            className="bg-white w-4/5 h-fit p-5 flex flex-col gap-5 relative"
+          >
             {/* Close button */}
             <div className="flex justify-end">
               <button onClick={toggleReportOpen} className="text-black text-lg">
@@ -723,7 +720,8 @@ const Sales = () => {
             <Button
               variant={"secondary"}
               onClick={addReport}
-              className="w-full rounded-none mt-10 text-white">
+              className="w-full rounded-none mt-10 text-white"
+            >
               {lang === "en" ? "Submit" : lang === "ar" ? "إرسال" : "بکەرەوە"}
             </Button>
           </Card>
@@ -732,7 +730,8 @@ const Sales = () => {
       <Dialog
         open={modalVisible}
         onClose={() => setModalVisible(false)}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
         <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
           <Dialog.Title className="text-lg font-semibold">
             Add Location
@@ -765,7 +764,8 @@ const Sales = () => {
             <button
               type="button"
               className="w-full border border-gray-300 rounded px-3 py-2 text-left"
-              onClick={() => setShowTimePicker(!showTimePicker)}>
+              onClick={() => setShowTimePicker(!showTimePicker)}
+            >
               Time: {formatDateTime(newLocationInfo.time)}
             </button>
             {showTimePicker && (
@@ -787,13 +787,15 @@ const Sales = () => {
 
           <button
             className="w-full bg-teal-500 text-white rounded px-3 py-2 hover:bg-teal-600"
-            onClick={() => saveNewLocation()}>
+            onClick={() => saveNewLocation()}
+          >
             Assign
           </button>
 
           <button
             className="w-full border border-red-500 text-red-500 rounded px-3 py-2 hover:bg-red-50"
-            onClick={() => setModalVisible(false)}>
+            onClick={() => setModalVisible(false)}
+          >
             Cancel
           </button>
         </div>
@@ -801,7 +803,8 @@ const Sales = () => {
       {activate && (
         <div
           onClick={() => setActivate(false)}
-          className="bg-white shadow-md flex flex-col items-center justify-center gap-5 absolute top-1/5 left-1/2 -translate-x-1/2 w-3/4 p-5 animate__animated animate__fadeIn animate__faster">
+          className="bg-white shadow-md flex flex-col items-center justify-center gap-5 absolute top-1/5 left-1/2 -translate-x-1/2 w-3/4 p-5 animate__animated animate__fadeIn animate__faster"
+        >
           <div className="p-2 aspect-square rounded-full bg-yellow-300">
             <Info />
           </div>

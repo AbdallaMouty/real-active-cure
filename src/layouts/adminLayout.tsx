@@ -65,7 +65,8 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="w-screen h-screen overflow-hidden">
       <nav
         dir={lang === "en" ? "ltr" : "rtl"}
-        className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[9vh] font-semibold gap-5 pt-16">
+        className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[9vh] font-semibold gap-5 pt-16"
+      >
         <Menu className="text-white" onClick={() => setSide(true)} />
         <span className="text-white capitalize">
           {user?.email.split("@")[0].replaceAll("_", " ")}
@@ -75,29 +76,34 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
         <div
           className={`w-full h-full absolute top-0 left-0 flex ${
             lang === "en" ? "flex-row" : "flex-row-reverse"
-          } z-50 animate__animated animate__fadeIn animate__faster backdrop-blur-xs`}>
+          } z-50 animate__animated animate__fadeIn animate__faster backdrop-blur-xs`}
+        >
           <div
-            className={`w-[55%] h-full bg-secondary flex flex-col items-center justify-between animate__animated ${
+            className={`w-[60%] h-full bg-secondary flex flex-col items-center justify-between animate__animated ${
               lang === "en" ? "animate__slideInLeft" : "animate__slideInRight"
-            } animate__faster p-4 py-10`}>
+            } animate__faster p-4 py-10`}
+          >
             <img src={Logo} className="w-full" alt="" />
             <div
               dir={lang === "en" ? "ltr" : "rtl"}
-              className="w-full flex flex-col items-start justify-center text-white text-lg gap-4 px-8">
+              className="w-full flex flex-col items-start justify-center text-white text-xl gap-4 px-8"
+            >
               {links.map((link) => (
                 <button
                   className="text-start"
                   onClick={() => {
                     navigate(link.href);
                     setSide(false);
-                  }}>
+                  }}
+                >
                   {link[lang]}
                 </button>
               ))}
             </div>
             <div
               dir={lang === "en" ? "ltr" : "rtl"}
-              className="w-full flex flex-col items-start justify-start text-white pt-40 px-8 text-xl gap-3">
+              className="w-full flex flex-col items-start justify-start text-white pt-40 px-8 text-xl gap-3"
+            >
               <Accordion type="single" className="w-full p-0" collapsible>
                 <AccordionItem value="1">
                   <AccordionTrigger className="text-xl font-normal gap-1">
@@ -112,7 +118,8 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
                     {langs.map((l) => (
                       <button
                         onClick={() => setLang(l.value as "en" | "ar" | "kr")}
-                        className="w-full flex items-center justify-start gap-2">
+                        className="w-full flex items-center justify-start gap-2"
+                      >
                         <img src={l.flag} className="w-10" />
                         {l.name}
                       </button>
@@ -125,7 +132,8 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
                   setUser(null);
                   navigate("/");
                 }}
-                className="flex items-center justify-center gap-1">
+                className="flex items-center justify-center gap-1 text-nowrap"
+              >
                 <LogoutIcon />{" "}
                 {lang === "en"
                   ? "Logout"

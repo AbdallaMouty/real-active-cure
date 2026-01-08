@@ -78,15 +78,16 @@ const Admin = () => {
             </span>
           </div>
         </div>
-      <div className="w-full flex-1 flex flex-col items-center justify-center gap-5 px-7">
-        {links.map((link) => (
-          <Button
-            onClick={() => navigate(link.href)}
-            className="w-full rounded-full p-6 text-xl">
-            {link[lang]}
-          </Button>
-        ))}
-      </div>
+        <div className="w-full flex-1 flex flex-col items-center justify-center gap-5 px-7">
+          {links.map((link) => (
+            <Button
+              onClick={() => navigate(link.href)}
+              className="w-full rounded-full p-6 text-xl"
+            >
+              {link[lang]}
+            </Button>
+          ))}
+        </div>
       </div>
       <ErrorDialogComponent />
     </>

@@ -60,7 +60,8 @@ export default function Reports() {
         <Card className="w-full h-[85%] rounded-2xl shadow-md">
           <CardHeader
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="flex flex-row justify-between items-center text-black font-medium px-6">
+            className="flex flex-row justify-between items-center text-black font-medium px-6"
+          >
             <span className="w-1/3">{text.admins.reports.title[lang]}</span>
             <span className="w-1/4">{text.admins.reports.sender[lang]}</span>
             <span className="w-1/6 text-center">
@@ -70,58 +71,73 @@ export default function Reports() {
               {text.admins.reports.ops[lang]}
             </span>
           </CardHeader>
-          <CardContent className="px-2">
-            <ScrollArea
-              dir={lang === "en" ? "ltr" : "rtl"}
-              className="h-[70vh] w-full">
-              {reports.map((admin) => (
-                <div
-                  key={admin.id}
-                  className="flex flex-row items-center justify-between py-3 border-b border-gray-300 text-sm">
-                  {/* Title */}
-                  <p className="w-1/3 text-gray-600 truncate">{admin.title}</p>
+          <CardContent className="p-0">
+            {/* Horizontal scroll */}
+            <div className="w-full overflow-x-auto">
+              {/* Force table width so it scrolls on small screens */}
+              <div className="min-w-[400px]">
+                <ScrollArea
+                  dir={lang === "en" ? "ltr" : "rtl"}
+                  className="h-[70vh] w-full"
+                >
+                  {reports.map((admin) => (
+                    <div
+                      key={admin.id}
+                      className="flex flex-row items-center justify-between py-3 border-b border-gray-300 text-sm px-4"
+                    >
+                      {/* Title */}
+                      <p className="w-1/3 text-gray-600 truncate">
+                        {admin.title}
+                      </p>
 
-                  {/* Sender */}
-                  <p className="w-1/4 text-gray-500 truncate">{admin.sender}</p>
+                      {/* Sender */}
+                      <p className="w-1/4 text-gray-500 truncate">
+                        {admin.sender}
+                      </p>
 
-                  {/* Status */}
-                  <div className="w-1/6 flex justify-center">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        admin.status
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}>
-                      {admin.status ? "Open" : "Unread"}
-                    </span>
-                  </div>
+                      {/* Status */}
+                      <div className="w-1/6 flex justify-center">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            admin.status
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {admin.status ? "Open" : "Unread"}
+                        </span>
+                      </div>
 
-                  {/* Operations */}
-                  <div className="w-1/4 flex justify-center gap-1">
-                    <button
-                      onClick={() => {
-                        const updated: Report[] = reports.map((r) =>
-                          r.id === admin.id ? { ...r, status: true } : r
-                        );
-                        setReports(updated);
-                        setSelected(admin);
-                        setShowModal(true);
-                        setAsRead(admin.id.toString());
-                      }}
-                      className=" hover:bg-gray-100 rounded-lg">
-                      <OpenIcon />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setReports(reports.filter((a) => a.id !== admin.id))
-                      }
-                      className="hover:bg-gray-100 rounded-lg">
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </ScrollArea>
+                      {/* Operations */}
+                      <div className="w-1/4 flex justify-center gap-3">
+                        <button
+                          onClick={() => {
+                            const updated: Report[] = reports.map((r) =>
+                              r.id === admin.id ? { ...r, status: true } : r
+                            );
+                            setReports(updated);
+                            setSelected(admin);
+                            setShowModal(true);
+                            setAsRead(admin.id.toString());
+                          }}
+                          className=" hover:bg-gray-100 rounded-lg"
+                        >
+                          <OpenIcon />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setReports(reports.filter((a) => a.id !== admin.id))
+                          }
+                          className="hover:bg-gray-100 rounded-lg"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </ScrollArea>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -129,7 +145,8 @@ export default function Reports() {
         <Drawer open={showModal} onOpenChange={setShowModal}>
           <DrawerContent
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="bg-white w-full sm:max-w-lg p-6">
+            className="bg-white w-full sm:max-w-lg p-6"
+          >
             <DrawerHeader>
               <DrawerTitle className="text-lg font-semibold text-start">
                 {text.admins.reports.rep_title[lang]}
@@ -149,7 +166,8 @@ export default function Reports() {
             <div className="flex justify-center mt-8">
               <Button
                 onClick={() => setShowModal(false)}
-                className="bg-teal-500 text-white">
+                className="bg-teal-500 text-white"
+              >
                 {text.admins.reports.ok[lang]}
               </Button>
             </div>
