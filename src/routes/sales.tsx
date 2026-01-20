@@ -47,6 +47,10 @@ const Sales = () => {
   const { showError, showSuccess, ErrorDialogComponent } = useErrorDialog();
   const navigate = useNavigate();
 
+  // Route tracking state
+  const [currentRoute, setCurrentRoute] = useState<{id: string, startTime: Date} | null>(null);
+  const [locationPointCounter, setLocationPointCounter] = useState(0);
+
   const langs = [
     { name: "English", flag: en, value: "en" },
     { name: "Arabic", flag: ar, value: "ar" },
@@ -65,6 +69,7 @@ const Sales = () => {
   });
   const [locations, setLocations] = useState<
     {
+      id: string;
       latitude: number;
       longitude: number;
       name: string;
@@ -119,13 +124,38 @@ const Sales = () => {
             const { latitude, longitude } = position.coords;
             setUserLocation({ latitude, longitude });
 
-            // Send to Supabase
+            // Enhanced GPS data collection
+            const accuracy = position.coords.accuracy || 0;
+            const speed = position.coords.speed || 0;
+            const heading = position.coords.heading || 0;
+            const timestamp = new Date().toISOString();
+
+            // Keep existing functionality for real-time position
             await supabase.from("user_locations").upsert({
               user_id: user.id,
               latitude,
               longitude,
-              updated_at: new Date().toISOString(),
+              updated_at: timestamp,
+              accuracy,
+              speed,
+              heading,
             });
+
+            // Record detailed path if we're tracking a route
+            if (currentRoute) {
+              await supabase.from("user_location_points").insert({
+                user_id: user.id,
+                route_id: currentRoute.id,
+                latitude,
+                longitude,
+                accuracy,
+                speed,
+                heading,
+                timestamp,
+                journey_sequence: locationPointCounter,
+              });
+              setLocationPointCounter(prev => prev + 1);
+            }
           }
         }
       );
@@ -144,33 +174,19 @@ const Sales = () => {
   const [side, setSide] = useState(false);
   const [activate, setActivate] = useState(false);
 
-  const today = new Date();
-  const today_date = `${today.getFullYear()}-${String(
-    today.getMonth() + 1
-  ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
   const getLocations = async () => {
     try {
-      const userData = await supabase.auth.getUser();
-      console.log(userData.data);
-      if (userData.data.user) {
-        const { data, error } = await supabase
-          .from("locations")
-          .select("*")
-          .eq("user_id", userData.data.user.id)
-          .eq("time", today_date);
-        if (data) {
-          setLocations(data);
-        } else {
-          showError(
-            "please check your internet connection",
-            "Connection Error"
-          );
-        }
-        if (error) {
-          console.log(error);
-          showError("Failed to fetch locations", "Error");
-        }
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (error) {
+        showError("Failed to fetch locations", "Error");
+      } else {
+        setLocations(data || []);
       }
     } catch (error) {
       console.error("Error getting locations:", error);
@@ -180,9 +196,104 @@ const Sales = () => {
 
   useEffect(() => {
     getLocations();
-  }, []);
+  }, [user]);
+
+  // Route management functions
+  const startRoute = async (startLocationId: string) => {
+    if (!user) return;
+    
+    try {
+      const { data: route } = await supabase
+        .from("user_routes")
+        .insert({
+          user_id: user.id,
+          assignment_start_id: startLocationId,
+          start_time: new Date().toISOString(),
+          route_status: 'active'
+        })
+        .select()
+        .single();
+
+      if (route) {
+        setCurrentRoute({ id: route.id, startTime: new Date() });
+        setLocationPointCounter(0);
+        showSuccess("Route tracking started");
+      }
+    } catch (error) {
+      console.error("Error starting route:", error);
+      showError("Failed to start route tracking", "Error");
+    }
+  };
+
+  const endRoute = async (endLocationId: string) => {
+    if (!currentRoute) return;
+
+    try {
+      // Get all points for this route
+      const { data: points } = await supabase
+        .from("user_location_points")
+        .select("*")
+        .eq("route_id", currentRoute.id)
+        .order("journey_sequence");
+
+      if (points && points.length > 1) {
+        // Calculate distance and duration
+        const distance = calculateTotalDistance(points);
+        const duration = Math.floor((new Date().getTime() - currentRoute.startTime.getTime()) / 1000);
+
+        // Update route with metrics
+        await supabase
+          .from("user_routes")
+          .update({
+            assignment_end_id: endLocationId,
+            end_time: new Date().toISOString(),
+            total_distance: distance,
+            total_duration: duration,
+            route_status: 'completed'
+          })
+          .eq("id", currentRoute.id);
+
+        showSuccess(`Route completed: ${Math.round(distance)}m in ${Math.round(duration/60)}min`);
+      }
+
+      setCurrentRoute(null);
+      setLocationPointCounter(0);
+    } catch (error) {
+      console.error("Error ending route:", error);
+      showError("Failed to end route tracking", "Error");
+    }
+  };
+
+  // Distance calculation function
+  const calculateTotalDistance = (points: any[]) => {
+    let totalDistance = 0;
+    for (let i = 1; i < points.length; i++) {
+      const p1 = points[i - 1];
+      const p2 = points[i];
+      const distance = haversineDistance(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+      totalDistance += distance;
+    }
+    return totalDistance;
+  };
+
+  // Haversine formula for distance calculation
+  const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  };
 
   const [selected, setSelected] = useState<{
+    id: string;
     latitude: number;
     longitude: number;
     name: string;
@@ -252,6 +363,7 @@ const Sales = () => {
     }
 
     const newLoc = {
+      id: "temp_" + Date.now(), // Temporary ID for new locations
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
       name: "",
@@ -368,7 +480,6 @@ const Sales = () => {
         .from("assignments")
         .select("*")
         .eq("user_id", user.id)
-        //@ts-expect-error any
         .eq("location_id", selected.id)
         .limit(1);
 
@@ -393,31 +504,38 @@ const Sales = () => {
           console.log("Assignment updated:", data);
           showSuccess("Assignment updated successfully.", "Success");
         }
-      } else {
-        // Insert a new assignment
-        const { data, error } = await supabase
-          .from("assignments")
-          .insert([
+        } else {
+          // End current route if one is active
+          if (currentRoute) {
+            await endRoute(selected.id);
+          }
+
+          // Insert a new assignment
+          const { data, error } = await supabase
+            .from("assignments")
+            .insert([
             {
               user_id: user.id,
-              //@ts-expect-error any
               location_id: selected.id,
               location_name: selected.name,
               location_address: selected.address,
               location_number: selected.number,
               assigned_at: new Date().toISOString(),
             },
-          ])
-          .select("*");
+            ])
+            .select("*");
 
-        if (error) {
-          console.error("Error logging assignment:", error);
-          showError("Could not save assignment.", "Database Error");
-        } else {
-          console.log("Assignment logged:", data);
-          showSuccess("Assigned successfully.", "Success");
+          if (error) {
+            console.error("Error logging assignment:", error);
+            showError("Could not save assignment.", "Database Error");
+          } else {
+            console.log("Assignment logged:", data);
+            showSuccess("Assigned successfully.", "Success");
+            
+            // Start tracking new route from this location
+            await startRoute(selected.id);
+          }
         }
-      }
     } catch (err) {
       console.error("Unexpected error logging assignment:", err);
       showError("An unexpected error occurred.", "Error");

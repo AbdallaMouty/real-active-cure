@@ -41,6 +41,7 @@ export interface User {
   name: string;
   phone: string;
   token: string;
+  user_metadata?: unknown;
 }
 // types.ts (recommended place)
 export type Report = {

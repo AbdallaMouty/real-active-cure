@@ -34,6 +34,31 @@ type UserLocation = {
   number: string;
 };
 
+type UserRoute = {
+  id: string;
+  user_id: string;
+  assignment_start_id: string;
+  assignment_end_id: string;
+  start_time: string;
+  end_time: string;
+  total_distance: number;
+  total_duration: number;
+  route_status: string;
+};
+
+type LocationPoint = {
+  id: string;
+  user_id: string;
+  route_id: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  speed: number;
+  heading: number;
+  timestamp: string;
+  journey_sequence: number;
+};
+
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
 
 export default function Assignments() {
@@ -47,6 +72,11 @@ export default function Assignments() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [now, setNow] = useState(Date.now());
   const { ErrorDialogComponent, showError } = useErrorDialog();
+
+  // Route tracking state
+  const [userRoutes, setUserRoutes] = useState<UserRoute[]>([]);
+  const [actualPath, setActualPath] = useState<LocationPoint[]>([]);
+  const [showActualPath, setShowActualPath] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -100,7 +130,7 @@ export default function Assignments() {
           const newLoc = payload.new as UserLocation;
           setUserLocation(newLoc);
           localStorage.setItem("last_user_location", JSON.stringify(newLoc));
-        }
+        },
       )
       .subscribe();
 
@@ -163,6 +193,7 @@ export default function Assignments() {
 
         if (selectedUser) {
           await getAssignments(selectedUser.id);
+          await fetchUserRoutes(selectedUser.id);
         }
       } catch {
         showError("Please check your internet connection");
@@ -184,35 +215,150 @@ export default function Assignments() {
 
   const [route, setRoute] = useState<GeoJSON.LineString | null>(null);
 
+  // Fetch user routes
+  const fetchUserRoutes = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("user_routes")
+        .select("*")
+        .eq("user_id", userId)
+        .order("start_time", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching routes:", error);
+        showError("Failed to load user routes");
+        return;
+      }
+
+      setUserRoutes(data || []);
+    } catch (error) {
+      console.error("Error fetching routes:", error);
+      showError("Failed to load user routes");
+    }
+  };
+
+  // Fetch actual path for a specific route
+  const fetchActualPath = async (routeId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("user_location_points")
+        .select("*")
+        .eq("route_id", routeId)
+        .order("journey_sequence", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching path:", error);
+        showError("Failed to load actual path");
+        return;
+      }
+
+      setActualPath(data || []);
+    } catch (error) {
+      console.error("Error fetching path:", error);
+      showError("Failed to load actual path");
+    }
+  };
+
+  // Convert actual path to GeoJSON
+  const pathToGeoJSON = (points: LocationPoint[]): GeoJSON.LineString => {
+    const coordinates = points.map((point) => [
+      point.longitude,
+      point.latitude,
+    ]);
+    return {
+      type: "LineString",
+      coordinates: coordinates,
+    };
+  };
+
+  // Calculate path quality
+  const assessPathQuality = (points: LocationPoint[]): string => {
+    if (points.length === 0) return "No data";
+
+    const avgAccuracy =
+      points.reduce((sum, p) => sum + p.accuracy, 0) / points.length;
+
+    if (avgAccuracy < 10 && points.length > 50) return "Excellent";
+    if (avgAccuracy < 20 && points.length > 20) return "Good";
+    if (avgAccuracy < 50) return "Fair";
+    return "Poor";
+  };
+
+  // Find the assignment that comes before the selected one
+  const getPreviousAssignment = (
+    selectedId: string | number,
+  ): UserLocation | null => {
+    const selectedIndex = assignments.findIndex((a) => a.id === selectedId);
+    if (selectedIndex === -1 || selectedIndex === assignments.length - 1) {
+      return null;
+    }
+    return assignments[selectedIndex + 1]; // assignments are sorted by created_at descending
+  };
+
   useEffect(() => {
     if (!selected) return;
+
     const getRoute = async () => {
-      if (userLocation) {
-        const geometry = await fetchRoute(
-          [userLocation.longitude, userLocation.latitude],
-          [selected.longitude, selected.latitude]
-        );
-        setRoute(geometry);
-      } else {
-        const geometry = await fetchRoute(
-          [
-            assignments.filter((a) => a.id === latest)[0].longitude,
-            assignments.filter((a) => a.id === latest)[0].latitude,
-          ],
-          [selected.longitude, selected.latitude]
-        );
-        setRoute(geometry);
+      const previousAssignment = getPreviousAssignment(selected.id);
+      let startLocation: UserLocation | null = null;
+
+      // Try to use previous assignment as start point
+      if (previousAssignment) {
+        startLocation = previousAssignment;
+      } else if (userLocation) {
+        // Fall back to current user location
+        startLocation = userLocation;
+      } else if (latest) {
+        // Fall back to latest assignment
+        const latestAssignment = assignments.find((a) => a.id === latest);
+        if (latestAssignment) {
+          startLocation = latestAssignment;
+        }
+      }
+
+      if (startLocation) {
+        try {
+          // First try to find a user route between these locations
+          if (user && previousAssignment) {
+            const matchingRoute = userRoutes.find(
+              (route) =>
+                route.assignment_start_id ===
+                  previousAssignment.id.toString() &&
+                route.assignment_end_id === selected.id.toString(),
+            );
+
+            if (matchingRoute) {
+              // Fetch the actual path for this route
+              await fetchActualPath(matchingRoute.id);
+              setShowActualPath(true);
+              setRoute(null); // Hide calculated route when showing actual path
+              return;
+            }
+          }
+
+          // If no actual route found, fall back to calculated route
+          setShowActualPath(false);
+          setActualPath([]);
+          const geometry = await fetchRoute(
+            [startLocation.longitude, startLocation.latitude],
+            [selected.longitude, selected.latitude],
+          );
+          setRoute(geometry);
+        } catch (error) {
+          console.error("Error fetching route:", error);
+          showError("Failed to fetch route");
+        }
       }
     };
 
     getRoute();
-  }, [assignments, selected, latest]);
+  }, [assignments, selected, latest, userLocation, userRoutes]);
 
   const isStale =
     userLocation &&
     now - new Date(userLocation.created_at).getTime() > 2 * 60 * 1000;
 
-  const [date, setDate] = useState<Date | undefined>(undefined);
+  const [date, setDate] = useState<Date | undefined>(new Date());
 
   return (
     <>
@@ -232,10 +378,10 @@ export default function Assignments() {
                   date
                     ? formatDateTime(a.created_at).split(",")[0] ===
                       formatDateTime(date.toISOString()).split(",")[0]
-                    : true
+                    : true,
                 ).length
               }{" "}
-              Assignments <ChevronDown />
+              Locations <ChevronDown />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {assignments
@@ -243,7 +389,7 @@ export default function Assignments() {
                   date
                     ? formatDateTime(a.created_at).split(",")[0] ===
                       formatDateTime(date.toISOString()).split(",")[0]
-                    : true
+                    : true,
                 )
                 .map((a) => (
                   <DropdownMenuItem onClick={() => setSelected(a)}>
@@ -273,7 +419,12 @@ export default function Assignments() {
           </DropdownMenu>
           <Button
             className="bg-teal-500 text-white hover:bg-teal-600"
-            onClick={() => user && getAssignments(user.id)}
+            onClick={() => {
+              if (user) {
+                getAssignments(user.id);
+                fetchUserRoutes(user.id);
+              }
+            }}
           >
             Refresh
           </Button>
@@ -318,7 +469,7 @@ export default function Assignments() {
               date
                 ? formatDateTime(a.created_at).split(",")[0] ===
                   formatDateTime(date.toISOString()).split(",")[0]
-                : true
+                : true,
             )
             .map((a) => (
               <Marker
@@ -349,7 +500,7 @@ export default function Assignments() {
                 )}
               </Marker>
             ))}
-          {/* Line between user and selected assignment */}
+          {/* Line between user and selected assignment (calculated route) */}
           {route && (
             <Source
               id="route-source"
@@ -369,36 +520,154 @@ export default function Assignments() {
                 }}
                 paint={{
                   "line-color": "#00CAA8",
-                  "line-width": 6,
+                  "line-width": showActualPath ? 3 : 6,
+                  "line-opacity": showActualPath ? 0.5 : 1,
+                  "line-dasharray": showActualPath ? [2, 2] : [1, 0], // Dashed when showing actual path
                 }}
               />
             </Source>
           )}
+
+          {/* Actual road path taken by employee */}
+          {showActualPath && actualPath.length > 1 && (
+            <Source
+              id="actual-path-source"
+              type="geojson"
+              data={{
+                type: "Feature",
+                geometry: pathToGeoJSON(actualPath),
+                properties: {
+                  "path-quality": assessPathQuality(actualPath),
+                  "point-count": actualPath.length,
+                },
+              }}
+            >
+              <Layer
+                id="actual-path-layer"
+                type="line"
+                layout={{
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
+                paint={{
+                  "line-color": "#ef4444", // Red for actual path
+                  "line-width": 5,
+                  "line-opacity": 0.9,
+                }}
+              />
+            </Source>
+          )}
+
+          {/* Speed-based coloring for actual path */}
+          {showActualPath &&
+            actualPath.length > 1 &&
+            actualPath.map((point, index) => {
+              if (index === 0) return null;
+              const speed = point.speed || 0;
+              let color = "#22c55e"; // Green for normal speed
+              if (speed < 5)
+                color = "#ef4444"; // Red for slow/stopped
+              else if (speed < 10)
+                color = "#f59e0b"; // Orange for slow
+              else if (speed > 20) color = "#3b82f6"; // Blue for fast
+
+              return (
+                <Source
+                  key={`speed-${index}`}
+                  id={`speed-source-${index}`}
+                  type="geojson"
+                  data={{
+                    type: "Feature",
+                    geometry: {
+                      type: "LineString",
+                      coordinates: [
+                        [
+                          actualPath[index - 1].longitude,
+                          actualPath[index - 1].latitude,
+                        ],
+                        [point.longitude, point.latitude],
+                      ],
+                    },
+                    properties: {},
+                  }}
+                >
+                  <Layer
+                    id={`speed-layer-${index}`}
+                    type="line"
+                    layout={{
+                      "line-join": "round",
+                      "line-cap": "round",
+                    }}
+                    paint={{
+                      "line-color": color,
+                      "line-width": 2,
+                      "line-opacity": 0.7,
+                    }}
+                  />
+                </Source>
+              );
+            })}
         </Map>
 
         {/* Bottom Info Card */}
         <div className="w-full h-[15vh] bg-primary p-4 px-6 flex items-center justify-center">
-          <div className="h-full w-2/3 flex flex-col items-start justify-start gap-2 text-white">
-            <div className="w-full flex items-center justify-start gap-2">
-              <HouseIcon />
-              <span>{selected?.name}</span>
+          {route && selected ? (
+            <>
+              <div className="h-full w-2/3 flex flex-col items-start justify-start gap-2 text-white">
+                <div className="w-full flex items-center justify-start gap-2">
+                  <span className="text-sm text-gray-300">
+                    From{" "}
+                    {getPreviousAssignment(selected.id)?.name ||
+                      "Current Location"}{" "}
+                    to {selected.name}
+                  </span>
+                </div>
+                <div className="w-full flex items-center justify-start gap-2">
+                  <HouseIcon />
+                  <span>{selected.name}</span>
+                </div>
+                <div className="w-full flex items-center justify-start gap-2">
+                  <TimeIcon />
+                  <span>
+                    {selected.created_at
+                      ? formatDateTime(selected.created_at)
+                      : "No time"}
+                  </span>
+                </div>
+              </div>
+              <div className="h-full w-1/3 flex items-center justify-between flex-col text-white text-lg">
+                <span>{selected?.number}</span>
+              </div>
+            </>
+          ) : selected ? (
+            <>
+              <div className="h-full w-2/3 flex flex-col items-start justify-start gap-2 text-white">
+                <div className="w-full flex items-center justify-start gap-2">
+                  <HouseIcon />
+                  <span>{selected?.name}</span>
+                </div>
+                <div className="w-full flex items-center justify-start gap-2">
+                  <TimeIcon />
+                  <span>
+                    {selected?.created_at
+                      ? formatDateTime(selected.created_at)
+                      : "No time"}
+                  </span>
+                </div>
+                <div className="w-full flex items-center justify-start gap-2">
+                  <AddressIcon />
+                  <span>{selected?.address}</span>
+                </div>
+              </div>
+              <div className="h-full w-1/3 flex items-center justify-between flex-col text-white text-lg">
+                <span>{selected?.number}</span>
+              </div>
+            </>
+          ) : (
+            <div className="text-white text-lg">
+              Select an assignment to view route
             </div>
-            <div className="w-full flex items-center justify-start gap-2">
-              <TimeIcon />
-              <span>
-                {selected?.created_at
-                  ? formatDateTime(selected.created_at)
-                  : "No time"}
-              </span>
-            </div>
-            <div className="w-full flex items-center justify-start gap-2">
-              <AddressIcon />
-              <span>{selected?.address}</span>
-            </div>
-          </div>
-          <div className="h-full w-1/3 flex items-center justify-between flex-col text-white text-lg">
-            <span>{selected?.number}</span>
-          </div>
+          )}
         </div>
       </div>
       <ErrorDialogComponent />

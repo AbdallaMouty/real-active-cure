@@ -23,11 +23,12 @@ const Admins = () => {
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [id, setId] = useState("");
+  const [active, setActive] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
-  const { lang } = store();
+  const { lang, user: admin } = store();
   const { showError, ErrorDialogComponent } = useErrorDialog();
 
   const getUsers = async () => {
@@ -35,8 +36,11 @@ const Admins = () => {
       const { data, error } = await supabaseAdmin.auth.admin.listUsers();
       console.log(data);
       if (data) {
+        console.log(admin);
         setUsers(
-          data.users.filter((user) => user.user_metadata?.is_anonymous !== true)
+          data.users
+            .filter((user) => user.user_metadata?.is_anonymous !== true)
+            .filter((u) => !u.user_metadata?.is_super),
         );
       }
       if (error) {
@@ -55,8 +59,8 @@ const Admins = () => {
           email: `${name.toLowerCase().replace(" ", "_")}@fake.com`,
           phone: mobile[0] === "0" ? mobile.slice(1) : mobile,
           password: mobile, // password same as phone number
-          user_metadata: { is_anonymous: false },
-        }
+          user_metadata: { is_anonymous: false, active },
+        },
       );
 
       if (error) {
@@ -80,7 +84,7 @@ const Admins = () => {
         email: `${name.toLowerCase().replace(" ", "_")}@fake.com`,
         phone: mobile[0] === "0" ? mobile.slice(1) : mobile,
         password: mobile,
-        user_metadata: { is_anonymous: false },
+        user_metadata: { is_anonymous: false, active: true },
         email_confirm: true,
       });
       if (error) {
@@ -120,14 +124,22 @@ const Admins = () => {
           <h1 className="text-[#7D7A7A] font-bold text-xl">
             {text.admins.admins.admins[lang]}
           </h1>
-          <Button
-            onClick={() => {
-              setName("");
-              setMobile("");
-              setShowModal(true);
-            }}>
-            {text.admins.admins.add[lang]}
-          </Button>
+          {admin &&
+            admin?.user_metadata &&
+            //@ts-expect-error any
+            admin.user_metadata.is_super &&
+            //@ts-expect-error any
+            admin.user_metadata.is_super === true && (
+              <Button
+                onClick={() => {
+                  setName("");
+                  setMobile("");
+                  setShowModal(true);
+                }}
+              >
+                {text.admins.admins.add[lang]}
+              </Button>
+            )}
         </div>
         <Card className="w-full max-h-5/6 h-5/6 mt-5">
           <CardHeader className="w-full flex items-center justify-between">
@@ -140,9 +152,16 @@ const Admins = () => {
             <span className="pr-2 text-black">
               {text.admins.admins.status[lang]}
             </span>
-            <span className="w-1/4 text-black">
-              {text.admins.admins.ops[lang]}
-            </span>
+            {admin &&
+              admin?.user_metadata &&
+              //@ts-expect-error any
+              admin.user_metadata.is_super &&
+              //@ts-expect-error any
+              admin.user_metadata.is_super === true && (
+                <span className="w-1/4 text-black">
+                  {text.admins.admins.ops[lang]}
+                </span>
+              )}
           </CardHeader>
           <CardContent className="w-full h-full flex flex-col items-start justify-start overflow-y-scroll">
             {users.map((user) => (
@@ -157,39 +176,46 @@ const Admins = () => {
                 </span>
                 <span
                   className={`mr-2 text-xs text-center py-0.5 p-1 rounded-full ${
-                    //@ts-expect-error any
-                    user.status !== 1
+                    user.user_metadata.active
                       ? "bg-active text-[#249D0C]"
                       : "bg-inactive text-[#DF0609]"
-                  }`}>
-                  {
-                    //@ts-expect-error any
-                    user.status !== 1 ? "Active" : "Inactive"
-                  }
+                  }`}
+                >
+                  {user.user_metadata.active ? "Active" : "Inactive"}
                 </span>
-                <span className="w-1/4 flex items-center justify-center gap-1">
-                  <button
-                    onClick={() => {
-                      {
-                        setId(user.id);
-                        //@ts-expect-error any
-                        setName(user.email.replace("_", " ").split("@")[0]);
-                        setMobile(user.phone || "");
-                        setShowEdit(true);
-                      }
-                    }}>
-                    <EditIcon />
-                  </button>
-                  <button
-                    onClick={() => {
-                      {
-                        setId(user.id);
-                        setShowDelete(true);
-                      }
-                    }}>
-                    <TrashIcon />
-                  </button>
-                </span>
+                {admin &&
+                  admin?.user_metadata &&
+                  //@ts-expect-error any
+                  admin.user_metadata.is_super &&
+                  //@ts-expect-error any
+                  admin.user_metadata.is_super === true && (
+                    <span className="w-1/4 flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => {
+                          {
+                            setId(user.id);
+                            //@ts-expect-error any
+                            setName(user.email.replace("_", " ").split("@")[0]);
+                            setMobile(user.phone || "");
+                            setActive(user.user_metadata.active);
+                            setShowEdit(true);
+                          }
+                        }}
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        onClick={() => {
+                          {
+                            setId(user.id);
+                            setShowDelete(true);
+                          }
+                        }}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </span>
+                  )}
               </div>
             ))}
           </CardContent>
@@ -206,7 +232,8 @@ const Admins = () => {
               <Button
                 className="flex-1 text-white"
                 variant="secondary"
-                onClick={() => setShowDelete(false)}>
+                onClick={() => setShowDelete(false)}
+              >
                 {text.admins.admins.delete.cancel[lang]}
               </Button>
               <Button
@@ -214,7 +241,8 @@ const Admins = () => {
                 onClick={async () => {
                   deleteUser();
                   setShowDelete(false);
-                }}>
+                }}
+              >
                 {text.admins.admins.delete.del[lang]}
               </Button>
             </DialogFooter>
@@ -223,7 +251,8 @@ const Admins = () => {
         <Dialog open={showModal} onOpenChange={setShowModal}>
           <DialogContent
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0">
+            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0"
+          >
             {/* Header */}
             <div className="w-full border-b border-white px-4 pt-3 pb-2">
               <DialogHeader className="text-center space-y-1">
@@ -265,7 +294,8 @@ const Admins = () => {
               <Button
                 onClick={addUser}
                 variant={"secondary"}
-                className="w-full text-white rounded-xl mt-2">
+                className="w-full text-white rounded-xl mt-2"
+              >
                 {text.admins.admins.add_new[lang]}
               </Button>
             </div>
@@ -274,7 +304,8 @@ const Admins = () => {
         <Dialog open={showEdit} onOpenChange={setShowEdit}>
           <DialogContent
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0">
+            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0"
+          >
             {/* Header */}
             <div className="w-full border-b border-white px-4 pt-3 pb-2">
               <DialogHeader className="text-center space-y-1">
@@ -312,11 +343,20 @@ const Admins = () => {
                   className="bg-white text-black rounded-xl placeholder:text-gray-400"
                 />
               </div>
+              <div className="flex items-center justify-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onClick={() => setActive(!active)}
+                />
+                <span>Active</span>
+              </div>
 
               <Button
                 onClick={editUser}
                 variant={"secondary"}
-                className="w-full text-white rounded-xl mt-2">
+                className="w-full text-white rounded-xl mt-2"
+              >
                 {text.admins.admins.edit_new[lang]}
               </Button>
             </div>

@@ -89,15 +89,34 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
               className="w-full flex flex-col items-start justify-center text-white text-xl gap-4 px-8"
             >
               {links.map((link) => (
-                <button
-                  className="text-start"
-                  onClick={() => {
-                    navigate(link.href);
-                    setSide(false);
-                  }}
-                >
-                  {link[lang]}
-                </button>
+                <>
+                  {link.en === "Tracking" ? (
+                    //@ts-expect-error any
+                    user?.user_metadata.active ? (
+                      <button
+                        className="text-start"
+                        onClick={() => {
+                          navigate(link.href);
+                          setSide(false);
+                        }}
+                      >
+                        {link[lang]}
+                      </button>
+                    ) : (
+                      <></>
+                    )
+                  ) : (
+                    <button
+                      className="text-start"
+                      onClick={() => {
+                        navigate(link.href);
+                        setSide(false);
+                      }}
+                    >
+                      {link[lang]}
+                    </button>
+                  )}
+                </>
               ))}
             </div>
             <div
@@ -111,8 +130,8 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
                     {lang === "en"
                       ? "Language"
                       : lang === "ar"
-                      ? "اللغة"
-                      : "زمان"}
+                        ? "اللغة"
+                        : "زمان"}
                   </AccordionTrigger>
                   <AccordionContent className="flex flex-col items-start justify-start gap-4">
                     {langs.map((l) => (
@@ -138,8 +157,8 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
                 {lang === "en"
                   ? "Logout"
                   : lang === "ar"
-                  ? "تسجيل الخروج"
-                  : "دەرچوون"}
+                    ? "تسجيل الخروج"
+                    : "دەرچوون"}
               </button>
             </div>
           </div>

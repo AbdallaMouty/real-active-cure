@@ -27,7 +27,7 @@ const SalesPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
-  const { lang } = store();
+  const { lang, user: admin } = store();
   const { ErrorDialogComponent, showError, showSuccess } = useErrorDialog();
 
   const getUsers = async () => {
@@ -36,7 +36,9 @@ const SalesPage = () => {
 
       if (data) {
         setUsers(
-          data.users.filter((user) => user.user_metadata?.is_anonymous === true)
+          data.users.filter(
+            (user) => user.user_metadata?.is_anonymous === true,
+          ),
         );
       }
       if (error) {
@@ -56,7 +58,7 @@ const SalesPage = () => {
           phone: mobile[0] === "0" ? mobile.slice(1) : mobile,
           password: mobile, // password same as phone number
           user_metadata: { is_anonymous: true },
-        }
+        },
       );
 
       if (error) {
@@ -125,7 +127,8 @@ const SalesPage = () => {
               setName("");
               setMobile("");
               setShowModal(true);
-            }}>
+            }}
+          >
             {text.admins.reps.add[lang]}
           </Button>
         </div>
@@ -161,35 +164,43 @@ const SalesPage = () => {
                     user.status !== 1
                       ? "bg-active text-[#249D0C]"
                       : "bg-inactive text-[#DF0609]"
-                  }`}>
+                  }`}
+                >
                   {
                     //@ts-expect-error any
                     user.status !== 1 ? "Active" : "Inactive"
                   }
                 </span>
-                <span className="w-1/4 flex items-center justify-center gap-1">
-                  <button
-                    onClick={() => {
-                      {
-                        setId(user.id);
-                        //@ts-expect-error any
-                        setName(user.email.replace("_", " ").split("@")[0]);
-                        setMobile(user.phone || "");
-                        setShowEdit(true);
-                      }
-                    }}>
-                    <EditIcon />
-                  </button>
-                  <button
-                    onClick={() => {
-                      {
-                        setId(user.id);
-                        setShowDelete(true);
-                      }
-                    }}>
-                    <TrashIcon />
-                  </button>
-                </span>
+                {
+                  //@ts-expect-error any
+                  admin.user_metadata.active && (
+                    <span className="w-1/4 flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => {
+                          {
+                            setId(user.id);
+                            //@ts-expect-error any
+                            setName(user.email.replace("_", " ").split("@")[0]);
+                            setMobile(user.phone || "");
+                            setShowEdit(true);
+                          }
+                        }}
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        onClick={() => {
+                          {
+                            setId(user.id);
+                            setShowDelete(true);
+                          }
+                        }}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </span>
+                  )
+                }
               </div>
             ))}
           </CardContent>
@@ -206,7 +217,8 @@ const SalesPage = () => {
               <Button
                 className="flex-1 text-white"
                 variant="secondary"
-                onClick={() => setShowDelete(false)}>
+                onClick={() => setShowDelete(false)}
+              >
                 {text.admins.admins.delete.cancel[lang]}
               </Button>
               <Button
@@ -214,7 +226,8 @@ const SalesPage = () => {
                 onClick={async () => {
                   deleteUser();
                   setShowDelete(false);
-                }}>
+                }}
+              >
                 {text.admins.admins.delete.del[lang]}
               </Button>
             </DialogFooter>
@@ -223,7 +236,8 @@ const SalesPage = () => {
         <Dialog open={showModal} onOpenChange={setShowModal}>
           <DialogContent
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0">
+            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0"
+          >
             {/* Header */}
             <div className="w-full border-b border-white px-4 pt-3 pb-2">
               <DialogHeader className="text-center space-y-1">
@@ -265,7 +279,8 @@ const SalesPage = () => {
               <Button
                 onClick={addUser}
                 variant={"secondary"}
-                className="w-full text-white rounded-xl mt-2">
+                className="w-full text-white rounded-xl mt-2"
+              >
                 {text.admins.reps.add_new[lang]}
               </Button>
             </div>
@@ -274,7 +289,8 @@ const SalesPage = () => {
         <Dialog open={showEdit} onOpenChange={setShowEdit}>
           <DialogContent
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0">
+            className="rounded-2xl bg-teal-500 text-white p-0 max-w-sm border-0"
+          >
             {/* Header */}
             <div className="w-full border-b border-white px-4 pt-3 pb-2">
               <DialogHeader className="text-center space-y-1">
@@ -316,7 +332,8 @@ const SalesPage = () => {
               <Button
                 onClick={editUser}
                 variant={"secondary"}
-                className="w-full text-white rounded-xl mt-2">
+                className="w-full text-white rounded-xl mt-2"
+              >
                 {text.admins.reps.edit_new[lang]}
               </Button>
             </div>

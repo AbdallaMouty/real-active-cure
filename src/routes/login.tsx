@@ -81,6 +81,7 @@ const Login = () => {
           role: role.en,
           email: data.user.email!,
           token: data.session.access_token,
+          user_metadata: data.user.user_metadata,
         });
         setAuthUser({
           id: data.user.id,
@@ -89,6 +90,7 @@ const Login = () => {
           role: role.en,
           email: data.user.email!,
           token: data.session.access_token,
+          user_metadata: data.user.user_metadata,
         });
         setPassword(phone);
 
@@ -123,7 +125,8 @@ const Login = () => {
         <div className="w-full grid grid-cols-2 gap-4">
           <div
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="col-span-2 w-full flex flex-col items-start justify-start gap-1">
+            className="col-span-2 w-full flex flex-col items-start justify-start gap-1"
+          >
             <span className="text-sm text-muted ml-4">
               {text.auth.name[lang]}
             </span>
@@ -136,7 +139,8 @@ const Login = () => {
           </div>
           <div
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="w-full flex flex-col items-start justify-start gap-1">
+            className="w-full flex flex-col items-start justify-start gap-1"
+          >
             <span className="text-sm text-muted ml-4">
               {text.auth.phone[lang]}
             </span>
@@ -150,7 +154,8 @@ const Login = () => {
           </div>
           <div
             dir={lang === "en" ? "ltr" : "rtl"}
-            className="w-full flex flex-col items-start justify-start gap-1">
+            className="w-full flex flex-col items-start justify-start gap-1"
+          >
             <span className="text-sm text-muted ml-4">
               {text.auth.role[lang]}
             </span>
@@ -166,7 +171,8 @@ const Login = () => {
                     onClick={() => {
                       setRole(r);
                       setOpen(false);
-                    }}>
+                    }}
+                  >
                     {r[lang]}
                   </DropdownMenuLabel>
                 ))}
@@ -175,7 +181,8 @@ const Login = () => {
           </div>
           <Button
             onClick={login}
-            className="col-span-2 w-full rounded-3xl text-xl py-7 font-bold">
+            className="col-span-2 w-full rounded-3xl text-xl py-7 font-bold"
+          >
             {text.auth.login[lang]}
           </Button>
           <div className="col-span-2 w-full flex items-center justify-center gap-6 mt-4">

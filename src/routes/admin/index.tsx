@@ -65,13 +65,21 @@ const Admin = () => {
         <div className="w-full flex items-center justify-center gap-5 p-10 px-7">
           <div className="bg-primary rounded-xl p-4 pr-20 text-white min-w-[40%]">
             <h1 className="text-4xl font-bold">
-              {users.filter((user) => !user.is_anonymous).length}
+              {
+                users
+                  .filter((user) => !user.user_metadata?.is_anonymous === true)
+                  .filter((u) => !u.user_metadata.is_super).length
+              }
             </h1>
             <span className="text-sm">{text.admins.index.admins[lang]}</span>
           </div>
           <div className="bg-primary rounded-xl p-4 flex-1 text-white">
             <h1 className="text-4xl font-bold">
-              {users.filter((user) => user.is_anonymous).length}
+              {
+                users
+                  .filter((user) => user.user_metadata?.is_anonymous === true)
+                  .filter((u) => !u.user_metadata.is_super).length
+              }
             </h1>
             <span className="text-sm truncate">
               {text.admins.index.reps[lang]}
