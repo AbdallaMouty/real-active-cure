@@ -48,7 +48,10 @@ const Sales = () => {
   const navigate = useNavigate();
 
   // Route tracking state
-  const [currentRoute, setCurrentRoute] = useState<{id: string, startTime: Date} | null>(null);
+  const [currentRoute, setCurrentRoute] = useState<{
+    id: string;
+    startTime: Date;
+  } | null>(null);
   const [locationPointCounter, setLocationPointCounter] = useState(0);
 
   const langs = [
@@ -94,7 +97,7 @@ const Sales = () => {
       if (permission.location === "denied") {
         showError(
           "Location permission denied. Please enable it to continue.",
-          "Permission Required"
+          "Permission Required",
         );
         return;
       }
@@ -154,10 +157,10 @@ const Sales = () => {
                 timestamp,
                 journey_sequence: locationPointCounter,
               });
-              setLocationPointCounter(prev => prev + 1);
+              setLocationPointCounter((prev) => prev + 1);
             }
           }
-        }
+        },
       );
     };
 
@@ -201,7 +204,7 @@ const Sales = () => {
   // Route management functions
   const startRoute = async (startLocationId: string) => {
     if (!user) return;
-    
+
     try {
       const { data: route } = await supabase
         .from("user_routes")
@@ -209,7 +212,7 @@ const Sales = () => {
           user_id: user.id,
           assignment_start_id: startLocationId,
           start_time: new Date().toISOString(),
-          route_status: 'active'
+          route_status: "active",
         })
         .select()
         .single();
@@ -239,7 +242,9 @@ const Sales = () => {
       if (points && points.length > 1) {
         // Calculate distance and duration
         const distance = calculateTotalDistance(points);
-        const duration = Math.floor((new Date().getTime() - currentRoute.startTime.getTime()) / 1000);
+        const duration = Math.floor(
+          (new Date().getTime() - currentRoute.startTime.getTime()) / 1000,
+        );
 
         // Update route with metrics
         await supabase
@@ -249,11 +254,13 @@ const Sales = () => {
             end_time: new Date().toISOString(),
             total_distance: distance,
             total_duration: duration,
-            route_status: 'completed'
+            route_status: "completed",
           })
           .eq("id", currentRoute.id);
 
-        showSuccess(`Route completed: ${Math.round(distance)}m in ${Math.round(duration/60)}min`);
+        showSuccess(
+          `Route completed: ${Math.round(distance)}m in ${Math.round(duration / 60)}min`,
+        );
       }
 
       setCurrentRoute(null);
@@ -270,23 +277,33 @@ const Sales = () => {
     for (let i = 1; i < points.length; i++) {
       const p1 = points[i - 1];
       const p2 = points[i];
-      const distance = haversineDistance(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+      const distance = haversineDistance(
+        p1.latitude,
+        p1.longitude,
+        p2.latitude,
+        p2.longitude,
+      );
       totalDistance += distance;
     }
     return totalDistance;
   };
 
   // Haversine formula for distance calculation
-  const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const haversineDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ) => {
     const R = 6371e3; // Earth's radius in meters
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
     const Δλ = ((lon2 - lon1) * Math.PI) / 180;
 
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) *
-      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c; // Distance in meters
@@ -504,16 +521,16 @@ const Sales = () => {
           console.log("Assignment updated:", data);
           showSuccess("Assignment updated successfully.", "Success");
         }
-        } else {
-          // End current route if one is active
-          if (currentRoute) {
-            await endRoute(selected.id);
-          }
+      } else {
+        // End current route if one is active
+        if (currentRoute) {
+          await endRoute(selected.id);
+        }
 
-          // Insert a new assignment
-          const { data, error } = await supabase
-            .from("assignments")
-            .insert([
+        // Insert a new assignment
+        const { data, error } = await supabase
+          .from("assignments")
+          .insert([
             {
               user_id: user.id,
               location_id: selected.id,
@@ -522,20 +539,20 @@ const Sales = () => {
               location_number: selected.number,
               assigned_at: new Date().toISOString(),
             },
-            ])
-            .select("*");
+          ])
+          .select("*");
 
-          if (error) {
-            console.error("Error logging assignment:", error);
-            showError("Could not save assignment.", "Database Error");
-          } else {
-            console.log("Assignment logged:", data);
-            showSuccess("Assigned successfully.", "Success");
-            
-            // Start tracking new route from this location
-            await startRoute(selected.id);
-          }
+        if (error) {
+          console.error("Error logging assignment:", error);
+          showError("Could not save assignment.", "Database Error");
+        } else {
+          console.log("Assignment logged:", data);
+          showSuccess("Assigned successfully.", "Success");
+
+          // Start tracking new route from this location
+          await startRoute(selected.id);
         }
+      }
     } catch (err) {
       console.error("Unexpected error logging assignment:", err);
       showError("An unexpected error occurred.", "Error");
@@ -571,8 +588,8 @@ const Sales = () => {
             {lang === "en"
               ? "Not Active"
               : lang === "ar"
-              ? "غير فعال"
-              : "چالاک نییە"}
+                ? "غير فعال"
+                : "چالاک نییە"}
           </span>
           <Switch
             dir="ltr"
@@ -614,28 +631,30 @@ const Sales = () => {
             <User fill="yellow" stroke="oklch(70.4% 0.14 182.503)" />
           </Marker>
         )}
-        {locations.map((location) => (
-          <Marker
-            longitude={location.longitude}
-            latitude={location.latitude}
-            anchor="center"
-            className="relative"
-            onClick={() => {
-              setSelected(location);
-              if (mapRef.current) {
-                //@ts-expect-error any
-                const map = mapRef.current.getMap(); // get underlying mapbox-gl instance
-                map.flyTo({
-                  center: [location.longitude, location.latitude],
-                  zoom: 15,
-                  essential: true, // this ensures animation works even with reduced motion
-                });
-              }
-            }}
-          >
-            <MapPin className="fill-teal-500 text-teal-700 size-8" />
-          </Marker>
-        ))}
+        {locations
+          .filter((l) => new Date(l.time).getDay() === new Date().getDay())
+          .map((location) => (
+            <Marker
+              longitude={location.longitude}
+              latitude={location.latitude}
+              anchor="center"
+              className="relative"
+              onClick={() => {
+                setSelected(location);
+                if (mapRef.current) {
+                  //@ts-expect-error any
+                  const map = mapRef.current.getMap(); // get underlying mapbox-gl instance
+                  map.flyTo({
+                    center: [location.longitude, location.latitude],
+                    zoom: 15,
+                    essential: true, // this ensures animation works even with reduced motion
+                  });
+                }
+              }}
+            >
+              <MapPin className="fill-teal-500 text-teal-700 size-8" />
+            </Marker>
+          ))}
         <Button
           onClick={assign}
           className="absolute bottom-4 right-4 rounded-full size-12 z-30 shadow-xl"
@@ -693,8 +712,8 @@ const Sales = () => {
                     {lang === "en"
                       ? "Language"
                       : lang === "ar"
-                      ? "اللغة"
-                      : "زمان"}
+                        ? "اللغة"
+                        : "زمان"}
                   </AccordionTrigger>
                   <AccordionContent className="flex flex-col items-start justify-start gap-4">
                     {langs.map((l) => (
@@ -722,8 +741,8 @@ const Sales = () => {
                 {lang === "en"
                   ? "Logout"
                   : lang === "ar"
-                  ? "تسجيل الخروج"
-                  : "دەرچوون"}
+                    ? "تسجيل الخروج"
+                    : "دەرچوون"}
               </button>
             </div>
           </div>
@@ -753,8 +772,8 @@ const Sales = () => {
               {lang === "en"
                 ? "Report an issue or request information"
                 : lang === "ar"
-                ? "الإبلاغ عن مشكلة أو طلب معلومات"
-                : "ڕاپۆرتی کێشەیەک بکە یان داوای زانیاری بکە"}
+                  ? "الإبلاغ عن مشكلة أو طلب معلومات"
+                  : "ڕاپۆرتی کێشەیەک بکە یان داوای زانیاری بکە"}
             </h2>
 
             {/* Report type selector */}
@@ -763,8 +782,8 @@ const Sales = () => {
                 {lang === "en"
                   ? "I would like to"
                   : lang === "ar"
-                  ? "أرغب أن"
-                  : "حەز دەکەم..."}
+                    ? "أرغب أن"
+                    : "حەز دەکەم..."}
               </span>
 
               <DropdownMenu>
@@ -774,13 +793,13 @@ const Sales = () => {
                       ? lang === "en"
                         ? "Report a Bug"
                         : lang === "ar"
-                        ? "الإبلاغ عن خطأ"
-                        : "ڕاپۆرتی هەڵەیەک بکە"
+                          ? "الإبلاغ عن خطأ"
+                          : "ڕاپۆرتی هەڵەیەک بکە"
                       : lang === "en"
-                      ? "Request Information"
-                      : lang === "ar"
-                      ? "طلب معلومات"
-                      : "داوای زانیاری بکە"}{" "}
+                        ? "Request Information"
+                        : lang === "ar"
+                          ? "طلب معلومات"
+                          : "داوای زانیاری بکە"}{" "}
                     <ChevronDown className="text-muted" strokeWidth={1} />
                   </button>
                 </DropdownMenuTrigger>
@@ -790,15 +809,15 @@ const Sales = () => {
                     {lang === "en"
                       ? "Report a Bug"
                       : lang === "ar"
-                      ? "الإبلاغ عن خطأ"
-                      : "ڕاپۆرتی هەڵەیەک بکە"}
+                        ? "الإبلاغ عن خطأ"
+                        : "ڕاپۆرتی هەڵەیەک بکە"}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setReportType("Info")}>
                     {lang === "en"
                       ? "Request Information"
                       : lang === "ar"
-                      ? "طلب معلومات"
-                      : "داوای زانیاری بکە"}
+                        ? "طلب معلومات"
+                        : "داوای زانیاری بکە"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -823,8 +842,8 @@ const Sales = () => {
                 {lang === "en"
                   ? "Description"
                   : lang === "ar"
-                  ? "وصف"
-                  : "وەسفی"}
+                    ? "وصف"
+                    : "وەسفی"}
               </label>
               <textarea
                 className="border border-gray-300 rounded px-2 py-1 w-full h-24"
@@ -930,8 +949,8 @@ const Sales = () => {
             {lang === "en"
               ? "Please active your account before. check the pointer above!"
               : lang === "ar"
-              ? "يرجى تفعيل حسابك قبل المحاولة. تحقق من المؤشر في الأعلى!"
-              : "تکایە بەکارھێنەری پێش بکە. بۆ چوونەژوورەوە بۆ ئەم پێشوورەیەکە ببینیت!"}
+                ? "يرجى تفعيل حسابك قبل المحاولة. تحقق من المؤشر في الأعلى!"
+                : "تکایە بەکارھێنەری پێش بکە. بۆ چوونەژوورەوە بۆ ئەم پێشوورەیەکە ببینیت!"}
           </p>
         </div>
       )}

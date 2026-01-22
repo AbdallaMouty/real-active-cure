@@ -354,9 +354,15 @@ export default function Assignments() {
     getRoute();
   }, [assignments, selected, latest, userLocation, userRoutes]);
 
-  const isStale =
-    userLocation &&
-    now - new Date(userLocation.created_at).getTime() > 2 * 60 * 1000;
+  const [isStale, setIsStale] = useState(false);
+
+  useEffect(() => {
+    if (userLocation) {
+      const timeDiff = now - new Date(userLocation.updated_at).getTime();
+      console.log(timeDiff);
+      setIsStale(timeDiff > 0);
+    }
+  }, [userLocation, now]);
 
   const [date, setDate] = useState<Date | undefined>(new Date());
 
