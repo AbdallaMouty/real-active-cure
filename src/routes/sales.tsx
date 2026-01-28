@@ -631,8 +631,12 @@ const Sales = () => {
             <User fill="yellow" stroke="oklch(70.4% 0.14 182.503)" />
           </Marker>
         )}
-        {locations
-          .filter((l) => new Date(l.time).getDay() === new Date().getDay())
+{locations
+          .filter((l) => {
+            const locationDate = new Date(l.time);
+            const today = new Date();
+            return locationDate.toDateString() === today.toDateString();
+          })
           .map((location) => (
             <Marker
               longitude={location.longitude}

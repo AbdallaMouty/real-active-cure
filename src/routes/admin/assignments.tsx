@@ -5,7 +5,7 @@ import Map, { Marker, type MapRef, Source, Layer } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import supabase, { supabaseAdmin } from "@/utils/supabase";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronLeft, MapPin } from "lucide-react";
+import { ChevronDown, ChevronLeft, MapPin, RefreshCcw } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import HouseIcon from "@/components/icons/HouseIcon";
 import TimeIcon from "@/components/icons/TimeIcon";
@@ -358,6 +358,7 @@ export default function Assignments() {
 
   useEffect(() => {
     if (userLocation) {
+      //@ts-expect-error any
       const timeDiff = now - new Date(userLocation.updated_at).getTime();
       console.log(timeDiff);
       setIsStale(timeDiff > 0);
@@ -387,7 +388,7 @@ export default function Assignments() {
                     : true,
                 ).length
               }{" "}
-              Locations <ChevronDown />
+              Loc. <ChevronDown />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {assignments
@@ -432,7 +433,7 @@ export default function Assignments() {
               }
             }}
           >
-            Refresh
+            <RefreshCcw />
           </Button>
         </div>
 
