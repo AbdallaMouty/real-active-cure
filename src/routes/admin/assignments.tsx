@@ -322,17 +322,27 @@ export default function Assignments() {
           if (user && previousAssignment) {
             const matchingRoute = userRoutes.find(
               (route) =>
-                route.assignment_start_id ===
-                  previousAssignment.id.toString() &&
-                route.assignment_end_id === selected.id.toString(),
+                route.assignment_start_id === previousAssignment.id &&
+                route.assignment_end_id === selected.id,
             );
 
             if (matchingRoute) {
+              console.log("Found matching route:", matchingRoute);
               // Fetch the actual path for this route
               await fetchActualPath(matchingRoute.id);
               setShowActualPath(true);
               setRoute(null); // Hide calculated route when showing actual path
               return;
+            } else {
+              console.log("No matching route found for:", {
+                previousAssignment: previousAssignment?.id,
+                selected: selected?.id,
+                availableRoutes: userRoutes.map(r => ({
+                  id: r.id,
+                  start_id: r.assignment_start_id,
+                  end_id: r.assignment_end_id
+                }))
+              });
             }
           }
 
