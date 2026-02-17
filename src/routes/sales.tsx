@@ -86,13 +86,23 @@ const Sales = () => {
     longitude: number;
   } | null>(null);
 
+  // Use ref to track currentRoute to avoid stale closure in useEffect
+  const currentRouteRef = useRef(currentRoute);
+  useEffect(() => {
+    currentRouteRef.current = currentRoute;
+  }, [currentRoute]);
+
+  const locationPointCounterRef = useRef(locationPointCounter);
+  useEffect(() => {
+    locationPointCounterRef.current = locationPointCounter;
+  }, [locationPointCounter]);
+
   useEffect(() => {
     let watchId: string | number | null = null;
 
     const initLocationTracking = async () => {
-      if (!active || !user?.id) return; // Only track when active and user exists
+      if (!active || !user?.id) return;
 
-      // Request permission
       const permission = await Geolocation.requestPermissions();
       if (permission.location === "denied") {
         showError(
@@ -102,7 +112,6 @@ const Sales = () => {
         return;
       }
 
-      // Get current location once
       try {
         const position = await Geolocation.getCurrentPosition({
           enableHighAccuracy: true,
@@ -116,24 +125,26 @@ const Sales = () => {
         });
       } catch (err) {
         console.error("Failed to get current location:", err);
+        showError("Failed to get current location. Please check your GPS settings.", "Location Error");
       }
 
-      // Start watching location continuously
       watchId = await Geolocation.watchPosition(
         { enableHighAccuracy: true, timeout: 5000 },
         async (position, err) => {
-          if (err) return console.error(err);
+          if (err) {
+            console.error("Location tracking error:", err);
+            showError("Location tracking encountered an error. Please check your GPS settings.", "GPS Error");
+            return;
+          }
           if (position) {
             const { latitude, longitude } = position.coords;
             setUserLocation({ latitude, longitude });
 
-            // Enhanced GPS data collection
             const accuracy = position.coords.accuracy || 0;
             const speed = position.coords.speed || 0;
             const heading = position.coords.heading || 0;
             const timestamp = new Date().toISOString();
 
-            // Keep existing functionality for real-time position
             await supabase.from("user_locations").upsert({
               user_id: user.id,
               latitude,
@@ -144,18 +155,17 @@ const Sales = () => {
               heading,
             });
 
-            // Record detailed path if we're tracking a route
-            if (currentRoute) {
+            if (currentRouteRef.current) {
               await supabase.from("user_location_points").insert({
                 user_id: user.id,
-                route_id: currentRoute.id,
+                route_id: currentRouteRef.current.id,
                 latitude,
                 longitude,
                 accuracy,
                 speed,
                 heading,
                 timestamp,
-                journey_sequence: locationPointCounter,
+                journey_sequence: locationPointCounterRef.current,
               });
               setLocationPointCounter((prev) => prev + 1);
             }
@@ -166,7 +176,6 @@ const Sales = () => {
 
     initLocationTracking();
 
-    // Stop tracking when component unmounts or 'active' changes
     return () => {
       if (watchId !== null) {
         Geolocation.clearWatch({ id: watchId.toString() });

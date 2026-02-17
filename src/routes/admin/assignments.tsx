@@ -364,16 +364,17 @@ export default function Assignments() {
     getRoute();
   }, [assignments, selected, latest, userLocation, userRoutes]);
 
+  const STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
+
   const [isStale, setIsStale] = useState(false);
 
   useEffect(() => {
     if (userLocation) {
       //@ts-expect-error any
       const timeDiff = now - new Date(userLocation.updated_at).getTime();
-      console.log(timeDiff);
-      setIsStale(timeDiff > 0);
+      setIsStale(timeDiff > STALE_THRESHOLD);
     }
-  }, [userLocation, now]);
+  }, [userLocation, now, STALE_THRESHOLD]);
 
   const [date, setDate] = useState<Date | undefined>(new Date());
 
