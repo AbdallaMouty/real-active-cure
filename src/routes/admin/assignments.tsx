@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Map, { Marker, type MapRef, Source, Layer } from "react-map-gl/mapbox";
-import "mapbox-gl/dist/mapbox-gl.css";
+import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  GoogleMap,
+  useJsApiLoader,
+  Marker,
+  Polyline,
+} from "@react-google-maps/api";
 import supabase, { supabaseAdmin } from "@/utils/supabase";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronLeft, MapPin, RefreshCcw } from "lucide-react";
+import { ChevronDown, ChevronLeft, RefreshCcw } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import HouseIcon from "@/components/icons/HouseIcon";
 import TimeIcon from "@/components/icons/TimeIcon";
@@ -59,32 +63,50 @@ type LocationPoint = {
   journey_sequence: number;
 };
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
+const GOOGLE_MAPS_API_KEY = "AIzaSyCxIXkR86N8Y4iyKsy8UNQpSXQ1_QS0BlA";
+
+const containerStyle = {
+  width: "100%",
+  height: "70vh",
+  position: "relative" as const,
+};
 
 export default function Assignments() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const mapRef = useRef<MapRef | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
   const [assignments, setAssignments] = useState<UserLocation[]>([]);
   const [selected, setSelected] = useState<UserLocation | null>(null);
   const [latest, setLatest] = useState<string | null>(null);
+  const [mapKey, setMapKey] = useState<string>("default");
+
   const [user, setUser] = useState<User | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [now, setNow] = useState(Date.now());
   const { ErrorDialogComponent, showError } = useErrorDialog();
 
-  // Route tracking state
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+  });
+
+  const onLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  const mapCenter =
+    mapKey !== "default" && selected
+      ? { lat: selected.latitude, lng: selected.longitude }
+      : userLocation
+        ? { lat: userLocation.latitude, lng: userLocation.longitude }
+        : { lat: 36.191113, lng: 44.009167 };
+
+  const mapZoom = mapKey !== "default" ? 15 : 10;
+
   const [userRoutes, setUserRoutes] = useState<UserRoute[]>([]);
   const [actualPath, setActualPath] = useState<LocationPoint[]>([]);
   const [showActualPath, setShowActualPath] = useState(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 10_000); // every 10 seconds (cheap & enough)
-
-    return () => clearInterval(interval);
-  }, []);
+  const [calculatedPath, setCalculatedPath] = useState<google.maps.LatLng[]>(
+    [],
+  );
 
   useEffect(() => {
     const cached = localStorage.getItem("last_user_location");
@@ -203,19 +225,33 @@ export default function Assignments() {
     loadUserAndAssignments();
   }, [id]);
 
-  const fetchRoute = async (start: [number, number], end: [number, number]) => {
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?geometries=geojson&access_token=${MAPBOX_TOKEN}`;
+  const fetchRoute = async (
+    start: google.maps.LatLngLiteral,
+    end: google.maps.LatLngLiteral,
+  ) => {
+    if (!mapRef.current) return;
 
-    const res = await fetch(url);
-    const data = await res.json();
+    const directionsService = new google.maps.DirectionsService();
 
-    console.log("data:", data);
-    return data.routes[0].geometry; // GeoJSON line
+    directionsService.route(
+      {
+        origin: start,
+        destination: end,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          const path = result.routes[0].overview_path.map(
+            (point) => new google.maps.LatLng(point.lat(), point.lng()),
+          );
+          setCalculatedPath(path);
+        } else {
+          console.error("Directions request failed:", status);
+        }
+      },
+    );
   };
 
-  const [route, setRoute] = useState<GeoJSON.LineString | null>(null);
-
-  // Fetch user routes
   const fetchUserRoutes = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -237,7 +273,6 @@ export default function Assignments() {
     }
   };
 
-  // Fetch actual path for a specific route
   const fetchActualPath = async (routeId: string) => {
     try {
       const { data, error } = await supabase
@@ -259,32 +294,65 @@ export default function Assignments() {
     }
   };
 
-  // Convert actual path to GeoJSON
-  const pathToGeoJSON = (points: LocationPoint[]): GeoJSON.LineString => {
-    const coordinates = points.map((point) => [
-      point.longitude,
-      point.latitude,
-    ]);
-    return {
-      type: "LineString",
-      coordinates: coordinates,
+  /*const pathToLatLng = (points: LocationPoint[]): google.maps.LatLng[] => {
+    return points.map(
+      (point) => new google.maps.LatLng(point.latitude, point.longitude),
+    );
+  };*/
+  const pathToLatLng = (
+    points: LocationPoint[],
+    maxDistanceMeters = 50,
+  ): google.maps.LatLng[] => {
+    const newPoints: google.maps.LatLng[] = [];
+
+    const toRadians = (deg: number) => (deg * Math.PI) / 180;
+    const haversineDistance = (
+      lat1: number,
+      lon1: number,
+      lat2: number,
+      lon2: number,
+    ) => {
+      const R = 6371000; // meters
+      const φ1 = toRadians(lat1);
+      const φ2 = toRadians(lat2);
+      const Δφ = toRadians(lat2 - lat1);
+      const Δλ = toRadians(lon2 - lon1);
+      const a =
+        Math.sin(Δφ / 2) ** 2 +
+        Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
     };
+
+    for (let i = 0; i < points.length; i++) {
+      const p1 = points[i];
+      newPoints.push(new google.maps.LatLng(p1.latitude, p1.longitude));
+
+      if (i === points.length - 1) break;
+
+      const p2 = points[i + 1];
+      const distance = haversineDistance(
+        p1.latitude,
+        p1.longitude,
+        p2.latitude,
+        p2.longitude,
+      );
+
+      // if distance > maxDistanceMeters, interpolate intermediate points
+      if (distance > maxDistanceMeters) {
+        const numSteps = Math.ceil(distance / maxDistanceMeters);
+        for (let step = 1; step < numSteps; step++) {
+          const lat =
+            p1.latitude + ((p2.latitude - p1.latitude) / numSteps) * step;
+          const lng =
+            p1.longitude + ((p2.longitude - p1.longitude) / numSteps) * step;
+          newPoints.push(new google.maps.LatLng(lat, lng));
+        }
+      }
+    }
+
+    return newPoints;
   };
-
-  // Calculate path quality
-  const assessPathQuality = (points: LocationPoint[]): string => {
-    if (points.length === 0) return "No data";
-
-    const avgAccuracy =
-      points.reduce((sum, p) => sum + p.accuracy, 0) / points.length;
-
-    if (avgAccuracy < 10 && points.length > 50) return "Excellent";
-    if (avgAccuracy < 20 && points.length > 20) return "Good";
-    if (avgAccuracy < 50) return "Fair";
-    return "Poor";
-  };
-
-  // Find the assignment that comes before the selected one
   const getPreviousAssignment = (
     selectedId: string | number,
   ): UserLocation | null => {
@@ -292,7 +360,7 @@ export default function Assignments() {
     if (selectedIndex === -1 || selectedIndex === assignments.length - 1) {
       return null;
     }
-    return assignments[selectedIndex + 1]; // assignments are sorted by created_at descending
+    return assignments[selectedIndex + 1];
   };
 
   useEffect(() => {
@@ -302,14 +370,11 @@ export default function Assignments() {
       const previousAssignment = getPreviousAssignment(selected.id);
       let startLocation: UserLocation | null = null;
 
-      // Try to use previous assignment as start point
       if (previousAssignment) {
         startLocation = previousAssignment;
       } else if (userLocation) {
-        // Fall back to current user location
         startLocation = userLocation;
       } else if (latest) {
-        // Fall back to latest assignment
         const latestAssignment = assignments.find((a) => a.id === latest);
         if (latestAssignment) {
           startLocation = latestAssignment;
@@ -318,7 +383,6 @@ export default function Assignments() {
 
       if (startLocation) {
         try {
-          // First try to find a user route between these locations
           if (user && previousAssignment) {
             const matchingRoute = userRoutes.find(
               (route) =>
@@ -328,32 +392,21 @@ export default function Assignments() {
 
             if (matchingRoute) {
               console.log("Found matching route:", matchingRoute);
-              // Fetch the actual path for this route
               await fetchActualPath(matchingRoute.id);
               setShowActualPath(true);
-              setRoute(null); // Hide calculated route when showing actual path
+              setCalculatedPath([]);
               return;
             } else {
-              console.log("No matching route found for:", {
-                previousAssignment: previousAssignment?.id,
-                selected: selected?.id,
-                availableRoutes: userRoutes.map(r => ({
-                  id: r.id,
-                  start_id: r.assignment_start_id,
-                  end_id: r.assignment_end_id
-                }))
-              });
+              console.log("No matching route found");
             }
           }
 
-          // If no actual route found, fall back to calculated route
           setShowActualPath(false);
           setActualPath([]);
-          const geometry = await fetchRoute(
-            [startLocation.longitude, startLocation.latitude],
-            [selected.longitude, selected.latitude],
+          await fetchRoute(
+            { lat: startLocation.latitude, lng: startLocation.longitude },
+            { lat: selected.latitude, lng: selected.longitude },
           );
-          setRoute(geometry);
         } catch (error) {
           console.error("Error fetching route:", error);
           showError("Failed to fetch route");
@@ -364,24 +417,29 @@ export default function Assignments() {
     getRoute();
   }, [assignments, selected, latest, userLocation, userRoutes]);
 
-  const STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-  const [isStale, setIsStale] = useState(false);
-
-  useEffect(() => {
-    if (userLocation) {
-      //@ts-expect-error any
-      const timeDiff = now - new Date(userLocation.updated_at).getTime();
-      setIsStale(timeDiff > STALE_THRESHOLD);
-    }
-  }, [userLocation, now, STALE_THRESHOLD]);
-
   const [date, setDate] = useState<Date | undefined>(new Date());
+
+  const handleMarkerClick = (a: UserLocation) => {
+    if (mapKey !== String(a.id)) {
+      setCalculatedPath([]);
+      setActualPath([]);
+      setShowActualPath(false);
+      setMapKey(String(a.id));
+    }
+    setSelected(a);
+  };
+
+  if (!isLoaded) {
+    return (
+      <div className="flex flex-col w-full h-full items-center justify-center">
+        <div className="text-white">Loading map...</div>
+      </div>
+    );
+  }
 
   return (
     <>
       <div className="flex flex-col w-full h-full">
-        {/* Header */}
         <div className="w-full flex items-center justify-start text-white bg-primary text-xl p-4 h-[8.7vh] font-semibold gap-5 pt-12">
           <ChevronLeft onClick={() => navigate("/admin/tracking")} />
           <span className="capitalize">
@@ -410,7 +468,7 @@ export default function Assignments() {
                     : true,
                 )
                 .map((a) => (
-                  <DropdownMenuItem onClick={() => setSelected(a)}>
+                  <DropdownMenuItem onClick={() => handleMarkerClick(a)}>
                     {a.name}
                   </DropdownMenuItem>
                 ))}
@@ -442,45 +500,52 @@ export default function Assignments() {
                 getAssignments(user.id);
                 fetchUserRoutes(user.id);
               }
-            }}
-          >
+            }}>
             <RefreshCcw />
           </Button>
         </div>
 
-        {/* Map */}
-        <Map
-          ref={mapRef}
-          mapboxAccessToken={MAPBOX_TOKEN}
-          initialViewState={{
-            longitude: 44.009167,
-            latitude: 36.191113,
-            zoom: 10,
-          }}
-          style={{ width: "100%", height: "70vh", position: "relative" }}
-          mapStyle="mapbox://styles/mapbox/streets-v9"
-        >
+        <GoogleMap
+          key={mapKey}
+          mapContainerStyle={containerStyle}
+          center={mapCenter}
+          zoom={mapZoom}
+          onLoad={onLoad}
+          options={{
+            disableDefaultUI: true,
+            zoomControl: true,
+          }}>
           {userLocation && (
             <Marker
-              longitude={userLocation.longitude}
-              latitude={userLocation.latitude}
-              anchor="center"
-            >
-              <>
-                <div
-                  className={`size-4 rounded-full cursor-pointer ${
-                    isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
-                  } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20`}
-                />
-                <div
-                  className={`size-7 rounded-full cursor-pointer aspect-square ${
-                    isStale ? "bg-neutral-500" : "bg-[#00CAA8]"
-                  } absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping`}
-                ></div>
-                <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping"></div>
-                <div className="size-6 rounded-full cursor-pointer aspect-square bg-[#3DD9BE] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
-              </>
-            </Marker>
+              position={{
+                lat: userLocation.latitude,
+                lng: userLocation.longitude,
+              }}
+              //animation={google.maps.Animation.BOUNCE}
+              icon={{
+                url:
+                  "data:image/svg+xml;charset=UTF-8," +
+                  encodeURIComponent(`
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <style>
+          .pulse {
+            animation: pulse 1.5s infinite;
+            transform-origin: center;
+          }
+          @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.5); opacity: 0.2; }
+            100% { transform: scale(1); opacity: 0.6; }
+          }
+        </style>
+        <circle cx="12" cy="12" r="6" fill="#00CAA8"/>
+        <circle class="pulse" cx="12" cy="12" r="10" fill="#00CAA8"/>
+      </svg>
+                `),
+                scaledSize: new google.maps.Size(32, 32),
+                anchor: new google.maps.Point(16, 16),
+              }}
+            />
           )}
           {assignments
             .filter((a) =>
@@ -492,144 +557,88 @@ export default function Assignments() {
             .map((a) => (
               <Marker
                 key={a.id}
-                longitude={a.longitude}
-                latitude={a.latitude}
-                className="relative"
-                onClick={(e) => {
-                  e.originalEvent.stopPropagation();
-                  setSelected(a);
-                  if (mapRef.current) {
-                    const map = mapRef.current.getMap();
-                    map.flyTo({
-                      center: [a.longitude, a.latitude],
-                      zoom: 15,
-                      essential: true,
-                    });
-                  }
+                position={{ lat: a.latitude, lng: a.longitude }}
+                onClick={() => handleMarkerClick(a)}
+                icon={{
+                  url:
+                    a.id === latest
+                      ? "data:image/svg+xml;charset=UTF-8," +
+                        encodeURIComponent(`
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#14B8A6" stroke="#0D9488" stroke-width="2">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                          <circle cx="12" cy="10" r="3" fill="#fff"/>
+                        </svg>
+                      `)
+                      : "data:image/svg+xml;charset=UTF-8," +
+                        encodeURIComponent(`
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#14B8A6" stroke="#0D9488" stroke-width="2">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                          <circle cx="12" cy="10" r="3" fill="#fff"/>
+                        </svg>
+                      `),
+                  scaledSize: new google.maps.Size(32, 32),
+                  anchor: new google.maps.Point(16, 32),
                 }}
-              >
-                {a.id !== latest && (
-                  <MapPin className="fill-teal-500 text-teal-700 size-8" />
-                )}
-                {a.id === latest && (
-                  <>
-                    <MapPin className="fill-teal-500 text-teal-700 size-10 animate-pulse" />
-                  </>
-                )}
-              </Marker>
+              />
             ))}
-          {/* Line between user and selected assignment (calculated route) */}
-          {route && (
-            <Source
-              id="route-source"
-              type="geojson"
-              data={{
-                type: "Feature",
-                geometry: route,
-                properties: {},
+
+          {calculatedPath.length > 0 && selected && (
+            <Polyline
+              key={`calculated-${selected.id}`}
+              path={calculatedPath}
+              options={{
+                strokeColor: "#00CAA8",
+                strokeOpacity: 1,
+                strokeWeight: 6,
+                geodesic: true,
               }}
-            >
-              <Layer
-                id="route-layer"
-                type="line"
-                layout={{
-                  "line-join": "round",
-                  "line-cap": "round",
-                }}
-                paint={{
-                  "line-color": "#00CAA8",
-                  "line-width": showActualPath ? 3 : 6,
-                  "line-opacity": showActualPath ? 0.5 : 1,
-                  "line-dasharray": showActualPath ? [2, 2] : [1, 0], // Dashed when showing actual path
-                }}
-              />
-            </Source>
+            />
           )}
 
-          {/* Actual road path taken by employee */}
-          {showActualPath && actualPath.length > 1 && (
-            <Source
-              id="actual-path-source"
-              type="geojson"
-              data={{
-                type: "Feature",
-                geometry: pathToGeoJSON(actualPath),
-                properties: {
-                  "path-quality": assessPathQuality(actualPath),
-                  "point-count": actualPath.length,
-                },
-              }}
-            >
-              <Layer
-                id="actual-path-layer"
-                type="line"
-                layout={{
-                  "line-join": "round",
-                  "line-cap": "round",
-                }}
-                paint={{
-                  "line-color": "#ef4444", // Red for actual path
-                  "line-width": 5,
-                  "line-opacity": 0.9,
+          {showActualPath && actualPath.length > 1 && selected && (
+            <>
+              <Polyline
+                key={`actual-${selected.id}`}
+                path={pathToLatLng(actualPath, 50)} // fill gaps up to 50 meters
+                options={{
+                  strokeColor: "#ef4444",
+                  strokeOpacity: 0.9,
+                  strokeWeight: 5,
+                  geodesic: true,
                 }}
               />
-            </Source>
-          )}
+              {actualPath.slice(0, -1).map((point, index) => {
+                const speed = point.speed || 0;
+                let color = "#22c55e";
+                if (speed < 5) color = "#ef4444";
+                else if (speed < 10) color = "#f59e0b";
+                else if (speed > 20) color = "#3b82f6";
 
-          {/* Speed-based coloring for actual path */}
-          {showActualPath &&
-            actualPath.length > 1 &&
-            actualPath.map((point, index) => {
-              if (index === 0) return null;
-              const speed = point.speed || 0;
-              let color = "#22c55e"; // Green for normal speed
-              if (speed < 5)
-                color = "#ef4444"; // Red for slow/stopped
-              else if (speed < 10)
-                color = "#f59e0b"; // Orange for slow
-              else if (speed > 20) color = "#3b82f6"; // Blue for fast
-
-              return (
-                <Source
-                  key={`speed-${index}`}
-                  id={`speed-source-${index}`}
-                  type="geojson"
-                  data={{
-                    type: "Feature",
-                    geometry: {
-                      type: "LineString",
-                      coordinates: [
-                        [
-                          actualPath[index - 1].longitude,
-                          actualPath[index - 1].latitude,
-                        ],
-                        [point.longitude, point.latitude],
-                      ],
-                    },
-                    properties: {},
-                  }}
-                >
-                  <Layer
-                    id={`speed-layer-${index}`}
-                    type="line"
-                    layout={{
-                      "line-join": "round",
-                      "line-cap": "round",
-                    }}
-                    paint={{
-                      "line-color": color,
-                      "line-width": 2,
-                      "line-opacity": 0.7,
+                return (
+                  <Polyline
+                    key={`speed-${selected.id}-${index}`}
+                    path={[
+                      {
+                        lat: actualPath[index].latitude,
+                        lng: actualPath[index].longitude,
+                      },
+                      { lat: point.latitude, lng: point.longitude },
+                    ]}
+                    options={{
+                      strokeColor: color,
+                      strokeOpacity: 0.7,
+                      strokeWeight: 2,
+                      geodesic: true,
                     }}
                   />
-                </Source>
-              );
-            })}
-        </Map>
+                );
+              })}
+            </>
+          )}
+        </GoogleMap>
 
-        {/* Bottom Info Card */}
         <div className="w-full h-[15vh] bg-primary p-4 px-6 flex items-center justify-center">
-          {route && selected ? (
+          {calculatedPath.length > 0 && selected ? (
             <>
               <div className="h-full w-2/3 flex flex-col items-start justify-start gap-2 text-white">
                 <div className="w-full flex items-center justify-start gap-2">

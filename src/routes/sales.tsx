@@ -1,9 +1,8 @@
 import store, { authStore } from "@/lib/store";
 import supabase from "@/utils/supabase";
-import { ChevronDown, Info, MapPin, Menu, User } from "lucide-react";
-import "mapbox-gl/dist/mapbox-gl.css";
-import { useEffect, useRef, useState } from "react";
-import Map, { Marker } from "react-map-gl/mapbox";
+import { ChevronDown, Info, MapPin, Menu } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 import { Switch } from "@/components/ui/switch";
 import AddressIcon from "@/components/AddressIcon";
 import TimeIcon from "@/components/icons/TimeIcon";
@@ -38,7 +37,18 @@ import LangIcon from "@/components/icons/LangIcon";
 import ReportIcon from "@/components/icons/ReportIcon";
 import { useErrorDialog } from "@/hooks/use-error-dialog";
 
-const token = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
+const GOOGLE_MAPS_API_KEY = "AIzaSyCxIXkR86N8Y4iyKsy8UNQpSXQ1_QS0BlA";
+
+const containerStyle = {
+  width: "100vw",
+  height: "70vh",
+  position: "relative" as const,
+};
+
+const center = {
+  lat: 36.191113,
+  lng: 44.009167,
+};
 
 const Sales = () => {
   const { active, setActive, reportOpen, toggleReportOpen, lang, setLang } =
@@ -47,7 +57,16 @@ const Sales = () => {
   const { showError, showSuccess, ErrorDialogComponent } = useErrorDialog();
   const navigate = useNavigate();
 
-  // Route tracking state
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+  });
+
+  const mapRef = useRef<google.maps.Map | null>(null);
+
+  const onLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
   const [currentRoute, setCurrentRoute] = useState<{
     id: string;
     startTime: Date;
@@ -61,9 +80,7 @@ const Sales = () => {
   ];
 
   const date = new Date();
-  const mapRef = useRef(null);
   const [location, setLocation] = useState<GeolocationPosition | null>(null);
-  //const [region, setRegion] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [newLocationInfo, setNewLocationInfo] = useState({
     name: "",
@@ -86,7 +103,6 @@ const Sales = () => {
     longitude: number;
   } | null>(null);
 
-  // Use ref to track currentRoute to avoid stale closure in useEffect
   const currentRouteRef = useRef(currentRoute);
   useEffect(() => {
     currentRouteRef.current = currentRoute;
@@ -129,7 +145,10 @@ const Sales = () => {
       }
 
       watchId = await Geolocation.watchPosition(
-        { enableHighAccuracy: true, timeout: 5000 },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+        },
         async (position, err) => {
           if (err) {
             console.error("Location tracking error:", err);
@@ -210,7 +229,6 @@ const Sales = () => {
     getLocations();
   }, [user]);
 
-  // Route management functions
   const startRoute = async (startLocationId: string) => {
     if (!user) return;
 
@@ -241,7 +259,6 @@ const Sales = () => {
     if (!currentRoute) return;
 
     try {
-      // Get all points for this route
       const { data: points } = await supabase
         .from("user_location_points")
         .select("*")
@@ -249,13 +266,11 @@ const Sales = () => {
         .order("journey_sequence");
 
       if (points && points.length > 1) {
-        // Calculate distance and duration
         const distance = calculateTotalDistance(points);
         const duration = Math.floor(
           (new Date().getTime() - currentRoute.startTime.getTime()) / 1000,
         );
 
-        // Update route with metrics
         await supabase
           .from("user_routes")
           .update({
@@ -280,8 +295,12 @@ const Sales = () => {
     }
   };
 
-  // Distance calculation function
-  const calculateTotalDistance = (points: any[]) => {
+  type Point = {
+    latitude: number;
+    longitude: number;
+  };
+
+  const calculateTotalDistance = (points: Point[]) => {
     let totalDistance = 0;
     for (let i = 1; i < points.length; i++) {
       const p1 = points[i - 1];
@@ -297,14 +316,13 @@ const Sales = () => {
     return totalDistance;
   };
 
-  // Haversine formula for distance calculation
   const haversineDistance = (
     lat1: number,
     lon1: number,
     lat2: number,
     lon2: number,
   ) => {
-    const R = 6371e3; // Earth's radius in meters
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -315,7 +333,7 @@ const Sales = () => {
       Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c; // Distance in meters
+    return R * c;
   };
 
   const [selected, setSelected] = useState<{
@@ -329,25 +347,22 @@ const Sales = () => {
   } | null>(locations[0]);
   const [reportType, setReportType] = useState("");
   const [showTimePicker, setShowTimePicker] = useState(false);
-  //const [add, setAdd] = useState(false);
 
   async function getCurrentLocation() {
     try {
-      // Request permission first (if needed)
       const permission = await Geolocation.requestPermissions();
       if (permission.location === "denied") {
         showError("Location permission denied", "Permission Required");
         return;
       }
 
-      // Get current position
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 10000,
       });
 
       //@ts-expect-error any
-      setLocation(position); // store in state
+      setLocation(position);
     } catch (error) {
       console.error("Error getting location:", error);
       showError("Failed to get current location", "Location Error");
@@ -358,7 +373,6 @@ const Sales = () => {
     getCurrentLocation();
   }, []);
 
-  // Format date and time
   const formatDateTime = (dateInput: Date) => {
     const date =
       typeof dateInput === "string" ? new Date(dateInput) : dateInput;
@@ -373,7 +387,6 @@ const Sales = () => {
     return `${day}/${month}/${year}, ${hours}:${minutes} ${ampm}`;
   };
 
-  // Assign new location
   const assign = async () => {
     if (!active) {
       setActivate(true);
@@ -389,7 +402,7 @@ const Sales = () => {
     }
 
     const newLoc = {
-      id: "temp_" + Date.now(), // Temporary ID for new locations
+      id: "temp_" + Date.now(),
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
       name: "",
@@ -402,24 +415,13 @@ const Sales = () => {
     setModalVisible(true);
     try {
       if (mapRef.current) {
-        //@ts-expect-error any
-        const map = mapRef.current.getMap(); // get underlying mapbox-gl instance
-        map.flyTo({
-          center: [newLoc.longitude, newLoc.latitude],
-          zoom: 15,
-          essential: true, // this ensures animation works even with reduced motion
-        });
+        mapRef.current.panTo({ lat: newLoc.latitude, lng: newLoc.longitude });
+        mapRef.current.setZoom(15);
       }
     } catch (e) {
       console.error(e);
     }
   };
-
-  /*const onTimeChange = (event: unknown, selectedDate?: Date) => {
-    if (selectedDate) {
-      setNewLocationInfo({ ...newLocationInfo, time: selectedDate });
-    }
-  };*/
 
   const saveNewLocation = async () => {
     if (!userLocation) {
@@ -501,7 +503,6 @@ const Sales = () => {
     }
 
     try {
-      // Check if an assignment already exists for this user + location
       const { data: existing, error: fetchError } = await supabase
         .from("assignments")
         .select("*")
@@ -516,10 +517,9 @@ const Sales = () => {
       }
 
       if (existing && existing.length > 0) {
-        // Update the existing assignment (e.g., refresh the timestamp)
         const { data, error } = await supabase
           .from("assignments")
-          .update({ assigned_at: new Date().toISOString() }) // update timestamp
+          .update({ assigned_at: new Date().toISOString() })
           .eq("id", existing[0].id)
           .select("*");
 
@@ -531,12 +531,10 @@ const Sales = () => {
           showSuccess("Assignment updated successfully.", "Success");
         }
       } else {
-        // End current route if one is active
         if (currentRoute) {
           await endRoute(selected.id);
         }
 
-        // Insert a new assignment
         const { data, error } = await supabase
           .from("assignments")
           .insert([
@@ -558,7 +556,6 @@ const Sales = () => {
           console.log("Assignment logged:", data);
           showSuccess("Assigned successfully.", "Success");
 
-          // Start tracking new route from this location
           await startRoute(selected.id);
         }
       }
@@ -567,6 +564,22 @@ const Sales = () => {
       showError("An unexpected error occurred.", "Error");
     }
   };
+
+  const handleMarkerClick = (location: typeof locations[0]) => {
+    setSelected(location);
+    if (mapRef.current) {
+      mapRef.current.panTo({ lat: location.latitude, lng: location.longitude });
+      mapRef.current.setZoom(15);
+    }
+  };
+
+  if (!isLoaded) {
+    return (
+      <div className="h-full w-full flex items-center justify-center">
+        <div className="text-white">Loading map...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full relative">
@@ -620,27 +633,30 @@ const Sales = () => {
           <span>{formatDate(date)}</span>
         </div>
       </div>
-      <Map
-        ref={mapRef}
-        mapboxAccessToken={token}
-        initialViewState={{
-          longitude: 44.009167,
-          latitude: 36.191113,
-          zoom: 10,
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={center}
+        zoom={10}
+        onLoad={onLoad}
+        options={{
+          disableDefaultUI: true,
+          zoomControl: true,
         }}
-        style={{ width: "100vw", height: "70vh", position: "relative" }}
-        mapStyle="mapbox://styles/mapbox/streets-v9"
       >
         {userLocation && active && (
           <Marker
-            longitude={userLocation.longitude}
-            latitude={userLocation.latitude}
-            anchor="center"
-          >
-            <User fill="yellow" stroke="oklch(70.4% 0.14 182.503)" />
-          </Marker>
+            position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: "#FFFF00",
+              fillOpacity: 1,
+              strokeColor: "#00CAA8",
+              strokeWeight: 2,
+            }}
+          />
         )}
-{locations
+        {locations
           .filter((l) => {
             const locationDate = new Date(l.time);
             const today = new Date();
@@ -648,25 +664,20 @@ const Sales = () => {
           })
           .map((location) => (
             <Marker
-              longitude={location.longitude}
-              latitude={location.latitude}
-              anchor="center"
-              className="relative"
-              onClick={() => {
-                setSelected(location);
-                if (mapRef.current) {
-                  //@ts-expect-error any
-                  const map = mapRef.current.getMap(); // get underlying mapbox-gl instance
-                  map.flyTo({
-                    center: [location.longitude, location.latitude],
-                    zoom: 15,
-                    essential: true, // this ensures animation works even with reduced motion
-                  });
-                }
+              key={location.id}
+              position={{ lat: location.latitude, lng: location.longitude }}
+              onClick={() => handleMarkerClick(location)}
+              icon={{
+                url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#14B8A6" stroke="#0D9488" stroke-width="2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3" fill="#fff"/>
+                  </svg>
+                `),
+                scaledSize: new google.maps.Size(32, 32),
+                anchor: new google.maps.Point(16, 32),
               }}
-            >
-              <MapPin className="fill-teal-500 text-teal-700 size-8" />
-            </Marker>
+            />
           ))}
         <Button
           onClick={assign}
@@ -674,7 +685,7 @@ const Sales = () => {
         >
           <MapPin className="size-6" />
         </Button>
-      </Map>
+      </GoogleMap>
       <div className="w-full h-[14.5vh] bg-primary p-4 px-6 flex items-center justify-center">
         <div className="h-full w-2/3 flex flex-col items-start justify-start gap-2 text-white">
           <div className="w-full flex items-center justify-start gap-2">
@@ -767,20 +778,17 @@ const Sales = () => {
           onClick={toggleReportOpen}
           className="absolute inset-0 bg-black/20 z-50 flex justify-center items-center"
         >
-          {/* Modal Card */}
           <Card
             dir={lang === "en" ? "ltr" : "rtl"}
             onClick={(e) => e.stopPropagation()}
             className="bg-white w-4/5 h-fit p-5 flex flex-col gap-5 relative"
           >
-            {/* Close button */}
             <div className="flex justify-end">
               <button onClick={toggleReportOpen} className="text-black text-lg">
                 X
               </button>
             </div>
 
-            {/* Header */}
             <h2 className="text-[#004F3D] text-center text-2xl font-semibold">
               {lang === "en"
                 ? "Report an issue or request information"
@@ -789,7 +797,6 @@ const Sales = () => {
                   : "ڕاپۆرتی کێشەیەک بکە یان داوای زانیاری بکە"}
             </h2>
 
-            {/* Report type selector */}
             <div className="flex justify-between items-center w-full">
               <span className="text-gray-500">
                 {lang === "en"
@@ -836,7 +843,6 @@ const Sales = () => {
               </DropdownMenu>
             </div>
 
-            {/* Title input */}
             <div className="flex flex-col gap-1">
               <label className="text-[#004F3D] text-lg">
                 {lang === "en" ? "Title" : lang === "ar" ? "عنوان" : "ناونیشان"}
@@ -849,7 +855,6 @@ const Sales = () => {
               />
             </div>
 
-            {/* Description textarea */}
             <div className="flex flex-col gap-1">
               <label className="text-[#004F3D] text-lg">
                 {lang === "en"
@@ -866,7 +871,6 @@ const Sales = () => {
               />
             </div>
 
-            {/* Submit button */}
             <Button
               variant={"secondary"}
               onClick={addReport}
